@@ -83,7 +83,32 @@ tir$tirseqRC=sapply(1:nrow(tir), function(x) getLongestCommonSubstring(c(tir$ups
 
 ## deal with pesky double counts by removing them here. May want to revisit, especially if some of these don't generate a TSD!!!!
 tir$tirseqSingle=unlist(lapply(tir$tirseq, function(l) l[[1]]))
-tir$tirseqRCSingle=unlist(lapply(tir$tirseqRC, function(l) l[[length(l)]]))
+tir$tirseqRCSingle=unlist(lapply(tir$tirseqRC, function(l) l[[length(l)]]))  ## not good - this can be either first or second! AAAHHHHHHHHHH
+
+###### strategy to deal with multiple TIR copies
+# 1. find position of each IR - which is up, which is down
+# 2. if they are same distance apart in both upstream and downstream flank, keep outer and join inner.  (add new column for imperfect??)
+# 3. search for tsd?
+
+# 1. 
+#tir[sapply(tir$tirseq, length)>1,]
+#tir
+#tir$tirstartupmulti[sapply(tir$tirseq, length)>1,]=sapply(which(sapply(tir$tirseq, length)>1), function(x) {
+																					upposns = as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(te, tir$upstreamExtra[x])))
+																					downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
+																					uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], tir$tirstartup[x]-1))
+																					downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
+																					}
+
+## first pass, try to see if adjacent bp are an obvious TSD
+tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
+tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
+tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
+
+
+
+#### alternate strategy: search through each iteratively for TSDs.
+
 
 
 ## get position of TIR in forward orientation of upstream extract.
@@ -139,8 +164,16 @@ tir$tsdtirjunctionpresent20=sapply(1:nrow(tir), function(x)  ## useBytes=T in gr
 #				regexpr(paste0(tir$tirseqRCSingle[x], tir$tsdseq[x]), tir$downstreamExtra[x])==tir$tirstartdown)
 
 ##adjust positions
-tir$start.adj=sapply(1:nrow(tir), function(x) (tir$start[x]-200) + tir$tirstartup[x] - 1 )## parentheses puts on same scale as upstreamExtra
-tir$end.adj= sapply(1:nrow(tir), function(x) (tir$end[x]-200) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 2)
+tir$start.adj=sapply(1:nrow(tir), function(x) (tir$start[x]-offset) + tir$tirstartup[x] - 1 )## parentheses puts on same scale as upstreamExtra
+tir$end.adj= sapply(1:nrow(tir), function(x) (tir$end[x]-offset) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 2)
+
+## NEED TO CONFIRM THIS FLOOR IS WORKING RIGHT!!!!
+tir$start.adj[tir$origlen <= 2*offset ]= sapply(which(tir$origlen <= 2*offset), function(x) (tir$start[x]-  offset - floor(tir$origlen[x]/2) + tir$tirstartup[x] - 1 ))
+tir$end.adj[tir$origlen <= 2*offset ]=   sapply(which(tir$origlen <= 2*offset), function(x) (tir$end[x] - floor(tir$origlen[x]/2) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 2))
+#as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2)))))
+##tir$downstreamExtra[tir$origlen <= 2*offset ] = as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$end[tir$origlen <= 2*offset ]- ( tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$end[tir$origlen <= 2*offset ] + (2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)))))
+
+
 
 ## add strand (relative to mtec)
 tir$strand=ifelse(tir$direction=='plus', '+', '-')
@@ -228,8 +261,8 @@ tir$whichrule[tir$seqdist20/nchar(tir$adjustedTIRdownRC20) <= 0.2 & is.na(tir$wh
 GENOMENAME='B73'
 #GENOMENAME='W22'
 d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdseqSingle, '_', tir$tirseqSingle, '_rule=', tir$whichrule))
-write.table(d[!is.na(tir$whichrule),], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(d, file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 
 
@@ -311,6 +344,18 @@ ggplot(tira[tira$tirseqSingle %in% tail(names(sort(table(tir$tirseqSingle[tir$su
 
 
 dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
