@@ -225,17 +225,32 @@ tir$seqdist20=sapply(1:nrow(tir), function(x) stringdist(tir$adjustedTIRup20[x],
 # 1. 
 #tir$tirstartupmulti=
 #tir[sapply(tir$tirseq, length)>1,]
+#as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2)))))		     
 #tir
 #tir$tirstartupmulti[sapply(tir$tirseq, length)>1,]=
-###########	AHHHHH CAN'T TRUST RC ORDER!!! NEED TO RC EACH INDIVIDUALLY	     
-temp=sapply(which(sapply(tir$tirseq, length)>1), function(x) {
+###########	AHHHHH CAN'T TRUST RC ORDER!!! NEED TO RC EACH INDIVIDUALLY	
+## okay, for one of the b73 entries (250971 in tir), there is a ! which can't be converted to sequence. I'm trying an ifelse statement to parse this		     
+temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
+#		     print(x)
+		    tirseq=as.character(tir$tirseq[[x]])
                     upposns = as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(te, tir$upstreamExtra[x])))
 #                    downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
-                    downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
-                    uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], tir$tirstartup[x]-1))
-                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
-		     return(data.frame(upposns, downposns, uptsds, downtsds))
+                    downposns=as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(tryCatch({as.character(reverseComplement(DNAString(te)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}),
+										      tir$downstreamExtra[x]))) + sapply(tir$tirseq[[x]], function(te) nchar(te))
+                    uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], uppos-1))
+                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]) + 1, downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]) + tir$tsdlen[x] ))
+		    tsdsequal=uptsds==downtsds & uptsds!='' & downtsds!='' ## account for empty seqs
+                    tsdtirjunctionpresent=sapply(1:length(upposns), function(index)  ## useBytes=T in grepl so there aren't locale errors when introducing weird characters with negative ranges
+								grepl(paste0(uptsds[[index]], tirseq[index]), tir$upstreamExtra[x], useBytes=T) & 
+								grepl(paste0(tryCatch({as.character(reverseComplement(DNAString(tirseq[index])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), downtsds[index]), tir$downstreamExtra[x], useBytes=T))
+
+		     return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent))
                     })
+## okay, so not inconsequential number of copies with multiple possible adjacent TIRs
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]])))
+## oh wait, this needs to be both adjacent AND equal to each other
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]] & temp[[x]][[6]])))
+##### WAIT! shouldn't ALL copies have an adjacent TSD then? why is the original filtering on 7's tsdtir junction not working? I have to be doing something wrong.	     
 #
 ## first pass, try to see if adjacent bp are an obvious TSD
 tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
