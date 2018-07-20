@@ -238,7 +238,7 @@ temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
                     downposns=as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(tryCatch({as.character(reverseComplement(DNAString(te)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}),
 										      tir$downstreamExtra[x]))) + sapply(tir$tirseq[[x]], function(te) nchar(te))
                     uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], uppos-1))
-                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]) + 1, downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]) + tir$tsdlen[x] ))
+                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]) + 1, downposns[downpos]  + tir$tsdlen[x] )) # was double counting tir length??
 		    tsdsequal=uptsds==downtsds & uptsds!='' & downtsds!='' ## account for empty seqs
                     tsdtirjunctionpresent=sapply(1:length(upposns), function(index)  ## useBytes=T in grepl so there aren't locale errors when introducing weird characters with negative ranges
 								grepl(paste0(uptsds[[index]], tirseq[index]), tir$upstreamExtra[x], useBytes=T) & 
