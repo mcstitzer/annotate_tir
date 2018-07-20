@@ -233,13 +233,13 @@ tir$seqdist20=sapply(1:nrow(tir), function(x) stringdist(tir$adjustedTIRup20[x],
 temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
 #		     print(x)
 		    tirseq=as.character(tir$tirseq[[x]])
-                    upposns = as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(te, tir$upstreamExtra[x])))
+		    tirseqRC=sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
+                    upposns = as.numeric(sapply(tirseq, function(tirF) regexpr(tirF, tir$upstreamExtra[x])))
 #                    downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
-                    downposns=as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(tryCatch({as.character(reverseComplement(DNAString(te)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}),
-										      tir$downstreamExtra[x]))) + sapply(tir$tirseq[[x]], function(te) nchar(te))
+                    downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) ## this should be the END of the TIR/TE!!!
                     uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], uppos-1))
-                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]) + 1, downposns[downpos]  + tir$tsdlen[x] )) # was double counting tir length??
-		    tsdsequal=uptsds==downtsds & uptsds!='' & downtsds!='' ## account for empty seqs
+                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos] , downposns[downpos]  + tir$tsdlen[x] -1)) # was double counting tir length??
+		    tsdsequal= uptsds==downtsds & uptsds!='' & downtsds!='' ## account for empty seqs
                     tsdtirjunctionpresent=sapply(1:length(upposns), function(index)  ## useBytes=T in grepl so there aren't locale errors when introducing weird characters with negative ranges
 								grepl(paste0(uptsds[[index]], tirseq[index]), tir$upstreamExtra[x], useBytes=T) & 
 								grepl(paste0(tryCatch({as.character(reverseComplement(DNAString(tirseq[index])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), downtsds[index]), tir$downstreamExtra[x], useBytes=T))
@@ -247,15 +247,37 @@ temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
 		     return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent))
                     })
 ## okay, so not inconsequential number of copies with multiple possible adjacent TIRs
-table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]])))
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]]))) ## this is always at least 2, because there are at least 2 TIR candidates here!
+table(sapply(1:length(temp), function(x) any(temp[[x]][[7]]))) # the only one left is the exclamation point disaster - ignore it??
 ## oh wait, this needs to be both adjacent AND equal to each other
 table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]] & temp[[x]][[6]])))
 ##### WAIT! shouldn't ALL copies have an adjacent TSD then? why is the original filtering on 7's tsdtir junction not working? I have to be doing something wrong.	     
 #
+	     
+### NEXT: add offset filtering to these too. Probably unite the entire tir df into this approach
+####      pick which ones to move forward for - simplest to just abandon those with two consistent TIR/TSD groups? might represent nested insertions, but who knows?
+
+######## PICK ONE from temp to add to tir's columns!
+## replace multis with the best TIR, abandoning those with >1 best TIR/TSD pair
+tir$tirseqSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[1]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[2]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdseq[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdadjacentup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+tir$tsdtirjunctionpresent[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+tir$tsdstartup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[3]][temp[[x]][[7]] & temp[[x]][[6]]], -1))
+tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[4]][temp[[x]][[7]] & temp[[x]][[6]]]-nchar(temp[[x]][[1]][1]), -1))
+						       
+### TO FIX: Make tsdstartdown consistent amongst copies? Or just don't care becasue I've got the tir end position??????
+							       
+							       
+							       
+							       
 ## first pass, try to see if adjacent bp are an obvious TSD
-tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
-tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
-tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
+#tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
+#tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
+#tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
 		     
 		     
 
@@ -290,7 +312,7 @@ write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Dat
 
 
 
- write.table(tir[,-c('tsdseq20', 'tsdseq', 'tirseqRC', 'tirseq')], paste0('all_tir_', GENOMENAME, '_extra.txt'), quote=F, sep='\t', col.names=T, row.names=F)
+ write.table(tir[,-c('tsdseq20', 'tsdseq', 'tirseqRC', 'tirseq')], paste0('all_tir_', GENOMENAME, '_', Sys.Date(), '_extra.txt'), quote=F, sep='\t', col.names=T, row.names=F)
 
 pdf('b73_tir_compare.pdf')
 #pdf('w22_tir_compare.pdf')
