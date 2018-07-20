@@ -85,25 +85,6 @@ tir$tirseqRC=sapply(1:nrow(tir), function(x) getLongestCommonSubstring(c(tir$ups
 tir$tirseqSingle=unlist(lapply(tir$tirseq, function(l) l[[1]]))
 tir$tirseqRCSingle=unlist(lapply(tir$tirseqRC, function(l) l[[length(l)]]))  ## not good - this can be either first or second! AAAHHHHHHHHHH
 
-###### strategy to deal with multiple TIR copies
-# 1. find position of each IR - which is up, which is down
-# 2. if they are same distance apart in both upstream and downstream flank, keep outer and join inner.  (add new column for imperfect??)
-# 3. search for tsd?
-
-# 1. 
-#tir[sapply(tir$tirseq, length)>1,]
-#tir
-#tir$tirstartupmulti[sapply(tir$tirseq, length)>1,]=sapply(which(sapply(tir$tirseq, length)>1), function(x) {
-																					upposns = as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(te, tir$upstreamExtra[x])))
-																					downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
-																					uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], tir$tirstartup[x]-1))
-																					downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
-																					}
-
-## first pass, try to see if adjacent bp are an obvious TSD
-tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
-tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
-tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
 
 
 
@@ -234,6 +215,34 @@ tir$adjustedTIRdownRC20[which(!is.na(tir$adjustedTIRdown20))]=sapply(which(!is.n
 
 tir$seqdist20=sapply(1:nrow(tir), function(x) stringdist(tir$adjustedTIRup20[x], tir$adjustedTIRdownRC20[x], method='h'))
 
+		     
+		     
+###### strategy to deal with multiple TIR copies
+# 1. find position of each IR - which is up, which is down
+# 2. if they are same distance apart in both upstream and downstream flank, keep outer and join inner.  (add new column for imperfect??)
+# 3. search for tsd?
+
+# 1. 
+#tir$tirstartupmulti=
+#tir[sapply(tir$tirseq, length)>1,]
+#tir
+#tir$tirstartupmulti[sapply(tir$tirseq, length)>1,]=
+###########	AHHHHH CAN'T TRUST RC ORDER!!! NEED TO RC EACH INDIVIDUALLY	     
+temp=sapply(which(sapply(tir$tirseq, length)>1), function(x) {
+                    upposns = as.numeric(sapply(tir$tirseq[[x]], function(te) regexpr(te, tir$upstreamExtra[x])))
+#                    downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
+                    downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
+                    uptsds=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x], tir$tirstartup[x]-1))
+                    downtsds=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos]  + nchar(tir$tirseq[[x]][downpos]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
+		     return(data.frame(upposns, downposns, uptsds, downtsds))
+                    })
+#
+## first pass, try to see if adjacent bp are an obvious TSD
+tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
+tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
+tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
+		     
+		     
 
 ## so now apply some rules
 
