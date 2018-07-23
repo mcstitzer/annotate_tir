@@ -122,6 +122,42 @@ tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], t
 tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
 tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
 
+## shorten TIR by 1 bp in case the TSD is pallindromic and getting incorporated!
+### start with 1 bp to see how much it changes - in theory, could reduce more.
+tir$tsdadjacentup1=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 1 - tir$tsdlen[x], tir$tirstartup[x]-1 +1 ))
+tir$tsdadjacentdown1=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -1 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -1))
+tir$tsdadjacentequal1=tir$tsdadjacentup1 == tir$tsdadjacentdown1
+			   
+tir$tsdadjacentup2=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 2 - tir$tsdlen[x], tir$tirstartup[x]-1 +2 ))
+tir$tsdadjacentdown2=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -2 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -2))
+tir$tsdadjacentequal2=tir$tsdadjacentup2 == tir$tsdadjacentdown2
+
+
+			    
+			    
+			    
+#### replace with these new values of semi-shifted TIR coordinates			    
+tir$adjacentup[tir$tsdadjacentequal1]=tir$tsdadjacentup1[tir$tsdadjacentequal1]			    			    
+tir$adjacentdown[tir$tsdadjacentequal1]=tir$tsdadjacentdown1[tir$tsdadjacentequal1]			    			    
+tir$adjacentequal[tir$tsdadjacentequal1]=tir$adjacentequal1[tir$tsdadjacentequal1]
+tir$tirseqSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten))    
+tir$tirseqRCSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqRCSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+## and 2 offset				       
+tir$adjacentup[tir$tsdadjacentequal2]=tir$tsdadjacentup2[tir$tsdadjacentequal2]			    			    
+tir$adjacentdown[tir$tsdadjacentequal2]=tir$tsdadjacentdown2[tir$tsdadjacentequal2]			    			    
+tir$adjacentequal[tir$tsdadjacentequal2]=tir$adjacentequal2[tir$tsdadjacentequal2]
+tir$tirseqSingle[tir$tsdadjacentequal2]=sapply(tir$tirseqSingle[tir$tsdadjacentequal2], function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten))    
+tir$tirseqRCSingle[tir$tsdadjacentequal2]=sapply(tir$tirseqRCSingle[tir$tsdadjacentequal2], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
+			    
+### reset tir positions	- easier to just find in sequence in a consistent way!		    
+tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
+## get position of TIR in forward orientation of downstream extract.
+tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x])))
+## having an issue with weird characters, removing those that don't have a tir present here.
+## removes about 150 copies where no match is found. 
+tirorig=tir
+tir=tir[tir$tirstartup != -1,]
+			    
 
 ### is inferred TSD the expected TSD length?
 
@@ -243,14 +279,46 @@ temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
                     tsdtirjunctionpresent=sapply(1:length(upposns), function(index)  ## useBytes=T in grepl so there aren't locale errors when introducing weird characters with negative ranges
 								grepl(paste0(uptsds[[index]], tirseq[index]), tir$upstreamExtra[x], useBytes=T) & 
 								grepl(paste0(tryCatch({as.character(reverseComplement(DNAString(tirseq[index])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), downtsds[index]), tir$downstreamExtra[x], useBytes=T))
+                    uptsds1=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x] +1, uppos-1 +1))
+                    downtsds1=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos] -1, downposns[downpos]  + tir$tsdlen[x] -1 -1)) # was double counting tir length??
+		    tsdsequal1= uptsds1==downtsds1 & uptsds1!='' & downtsds1!='' ## account for empty seqs
+                    uptsds2=sapply(upposns, function(uppos) substr(tir$upstreamExtra[x], uppos - tir$tsdlen[x] +2, uppos-1 +2))
+                    downtsds2=sapply(1:length(downposns), function(downpos) substr(tir$downstreamExtra[x], downposns[downpos] -2, downposns[downpos]  + tir$tsdlen[x] -1 -2)) # was double counting tir length??
+		    tsdsequal2= uptsds2==downtsds2 & uptsds2!='' & downtsds2!='' ## account for empty seqs
 
-		     return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent))
+#		    tirseq[tsdsequal1 & sum(tsdsequal1)==1]=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten))
+#		    tirseqRC[tsdsequal1 & sum(tsdsequal1)==1]=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1)
+#		    tirseq[tsdsequal2 & sum(tsdsequal2)==1]=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten))
+#		    tirseqRC[tsdsequal2 & sum(tsdsequal2)==1]=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2)
+#		    upposns[tsdsequal1 & sum(tsdsequal1)==1] = upposns[tsdsequal1 & sum(tsdsequal1)==1] +1
+#		    downposns[tsdsequal1 & sum(tsdsequal1)==1]=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -1 ## this should be the END of the TIR/TE!!!
+#		    upposns[tsdsequal2 & sum(tsdsequal2)==1] = upposns[tsdsequal1 & sum(tsdsequal1)==1] +2
+#		    downposns[tsdsequal2 & sum(tsdsequal2)==1]=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -2 ## this should be the END of the TIR/TE!!!
+#		    uptsds[tsdsequal1 & sum(tsdsequal1)==1]
+				     
+				     
+		    if(sum(tsdsequal1)==1){uptsds=uptsds1; downtsds=downtsds1; tsdsequal=tsdsequal1
+					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))
+					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+					  upposns=upposns[tsdsequal1 & sum(tsdsequal1)==1] +1
+					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -1
+					}else if(sum(tsdsequal2)==1){uptsds=uptsds2; downtsds=downtsds2; tsdsequal=tsdsequal2
+					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten)))
+					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
+					  upposns=upposns[tsdsequal1 & sum(tsdsequal1)==1] +2
+					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -2
+						}
+		    return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent))
                     })
+
 ## okay, so not inconsequential number of copies with multiple possible adjacent TIRs
 table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]]))) ## this is always at least 2, because there are at least 2 TIR candidates here!
 table(sapply(1:length(temp), function(x) any(temp[[x]][[7]]))) # the only one left is the exclamation point disaster - ignore it??
 ## oh wait, this needs to be both adjacent AND equal to each other
 table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]] & temp[[x]][[6]])))
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[10]])))
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[13]])))
+
 ##### WAIT! shouldn't ALL copies have an adjacent TSD then? why is the original filtering on 7's tsdtir junction not working? I have to be doing something wrong.	     
 #
 	     
@@ -268,9 +336,28 @@ tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp
 tir$tsdtirjunctionpresent[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
 tir$tsdstartup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[3]][temp[[x]][[7]] & temp[[x]][[6]]], -1))
 tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[4]][temp[[x]][[7]] & temp[[x]][[6]]]-nchar(temp[[x]][[1]][1]), -1))
-						       
+
+### update with off by 1 and off by 2 for TIR pallindrome							       
+## NOPE DOING WITHIN TEMP
+#tir$tirseqSingle[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp)[sum(temp[[x]][[10]]==1)]], function(x) ifelse(sum(temp[[x]][[10]])==1, substr(temp[[x]][[1]][temp[[x]][[10]]], 2, nchar(temp[[x]][[1]][temp[[x]][[10]]])), ''))
+#tir$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[10]])==1, temp[[x]][[2]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+#tir$tsdseq[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+#tir$tsdadjacentup[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+#tir$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+#tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+#tir$tsdtirjunctionpresent[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+#tir$tsdstartup[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[3]][temp[[x]][[7]] & temp[[x]][[6]]], -1))
+#tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)[sum(temp[[x]][[10]]==1)]] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[4]][temp[[x]][[7]] & temp[[x]][[6]]]-nchar(temp[[x]][[1]][1]), -1))
+
 ### TO FIX: Make tsdstartdown consistent amongst copies? Or just don't care becasue I've got the tir end position??????
-							       
+### again, take the cop out and just search for them again!!							       
+tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
+## get position of TIR in forward orientation of downstream extract.
+tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x])))
+## having an issue with weird characters, removing those that don't have a tir present here.
+## removes about 150 copies where no match is found. 
+tirorig=tir
+tir=tir[tir$tirstartup != -1,]
 							       
 							       
 							       
@@ -279,7 +366,8 @@ tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), f
 #tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
 #tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
 		     
-		     
+##### IF TSD is palindromic, we won't find it, as these bp get added to perfect TIR - change
+
 
 ## so now apply some rules
 
