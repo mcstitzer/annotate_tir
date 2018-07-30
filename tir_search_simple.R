@@ -81,7 +81,7 @@ tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSing
 tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x])))
 				 
 ## having an issue with weird characters, removing those that don't have a tir present here.
-## removes about 150 copies where no match is found. 
+## removes about 150 copies where no match is found. ## now 871 for full b73
 #tirorig=tir
 tir=tir[tir$tirstartup != -1,]
 				 
@@ -101,7 +101,12 @@ tir$tsdadjacentup2=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], 
 tir$tsdadjacentdown2=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -2 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -2))
 tir$tsdadjacentequal2=tir$tsdadjacentup2 == tir$tsdadjacentdown2
 
+#tir$tsdadjacentup3=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 3 - tir$tsdlen[x], tir$tirstartup[x]-1 +3 ))
+#tir$tsdadjacentdown3=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -3 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -3))
+#tir$tsdadjacentequal3=tir$tsdadjacentup3 == tir$tsdadjacentdown3
 
+			    
+			    
 #### replace with these new values of semi-shifted TIR coordinates - if TSD is pallindromic, it will be incorporated to the TIR. We don't want this!		    
 tir$tsdadjacentup[tir$tsdadjacentequal1]=tir$tsdadjacentup1[tir$tsdadjacentequal1]			    			    
 tir$tsdadjacentdown[tir$tsdadjacentequal1]=tir$tsdadjacentdown1[tir$tsdadjacentequal1]			    			    
@@ -191,14 +196,15 @@ tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSing
 # to do RC: as.character(reverseComplement(DNAString(tirF)))
 ## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
-tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
+tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
 
 
 ## having an issue with weird characters, removing those that don't have a tir present here.
 ## removes about 150 copies where no match is found. 
-tirorig=tir
-tir=tir[tir$tirstartup != -1,]
-tir=tir[tir$tirstartdown != -2,]
+#tirorig=tir
+#tir=tir[tir$tirstartup != -1,]
+#tir=tir[tir$tirstartdown != -2,]
 
 
 ############
@@ -232,21 +238,29 @@ tir$fam=paste0(tir$sup, substr(tir$mtec, 7,11))
 tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
 tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
 																		      
-tir$tirsmatch=tir$tirseqSingle==tir$tirupinseq & tir$tirseqSingle==tir$tirdowninseq						
+tir$tirsmatch=tir$tirseqSingle==tir$tirupinseq & tir$tirseqSingle==tir$tirdowninseq & tir$tirupinseq!=''	
+
+
 ################
 ## output gffs
 ################
 ## only keep those where TSDs are equal, adjacent to TIR!!!
-tir=tir[tir$tsdadjacentequal,]
+#tir=tir[tir$tsdadjacentequal,]
 
 GENOMENAME='B73'
 #GENOMENAME='W22'
-d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle))
-write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(d[d[,4]<d[,5] & tir$tsdadjacentequal,], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+### end -1 for gff3 format!
+d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj-1, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle))
+d=d[tir$tsdadjacentequal & tir$tirsmatch,]
+#write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+#write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(d, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
-
+## for maizegdb with Chr
+dd=d						
+levels(dd$tir.chrnew)[1:10]=paste0('Chr', levels(dd$tir.chrnew)[1:10])	
+write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+						
  write.table(tir[,-c( 'tirseqRC', 'tirseq')], paste0('all_tir_', GENOMENAME, '_', Sys.Date(), '_extra.txt'), quote=F, sep='\t', col.names=T, row.names=F)
 
 
