@@ -265,3 +265,53 @@ write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.Chr.gff3'), col.n
 
 
 ### 
+						
+						
+#########################						
+#### TIR mismatches  ####
+#########################
+tirm=tir[!tir$tsdadjacentequal & !tir$tirsmatch,]
+
+## deal with pesky multiple TIRs by removing them here. 
+tirm$tirseqSingle=unlist(lapply(tirm$tirseq, function(l) l[[1]]))
+tirm$tirseqRCSingle=unlist(lapply(tirm$tirseqRC, function(l) l[[length(l)]]))  ## not good - this can be either first or second! AAAHHHHHHHHHH
+tirm=tirm[!grepl('N', tirm$tirseqSingle),]
+
+## get position of TIR in forward orientation of upstream extract.
+tirm$tirstartup=sapply(1:nrow(tirm), function(x) as.numeric(regexpr(tirm$tirseqSingle[x], tirm$upstreamExtra[x])))
+
+## get position of TIR in forward orientation of downstream extract.
+tirm$tirstartdown=sapply(1:nrow(tirm), function(x) as.numeric(regexpr(tirm$tirseqRCSingle[x], tirm$downstreamExtra[x])))
+				 
+## having an issue with weird characters, removing those that don't have a tir present here.
+## removes about 150 copies where no match is found. ## now 871 for full b73
+#tirorig=tir
+tirm=tirm[tirm$tirstartup != -1,]
+			 
+			 
+#### whereas above, I searched inwards to find TSD accidentally called TIR, here			 
+#### search outside to find a matching TSD in a loop!	
+### so essentially, find closest TSD possible by stepping out one bp at a time.
+			 
+tirm$closestTSDseq=NA    ## this is the sequence of the matching TSD
+tirm$closestTSDoffset=NA ## this is the offset from the perfect TIR edge
+for(tirposoffset in 0:20){
+	tsdadjacentup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tir$tirstartup[x]-1 -tirposoffset ))
+	tsdadjacentdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 +tirposoffset ))
+	tsdadjacentequal=tsdadjacentup == tsdadjacentdown
+	tirm$closestTSDseq[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
+	tirm$closestTSDoffset[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tirposoffset
+	}
+			 
+			 
+## start to check TIR proposed by these new TSDs
+#### replace with these new values of semi-shifted TIR coordinates - if TSD is pallindromic, it will be incorporated to the TIR. We don't want this!		    
+tir$tsdadjacentup[tir$tsdadjacentequal1]=tir$tsdadjacentup1[tir$tsdadjacentequal1]			    			    
+tir$tsdadjacentdown[tir$tsdadjacentequal1]=tir$tsdadjacentdown1[tir$tsdadjacentequal1]			    			    
+tir$tsdadjacentequal[tir$tsdadjacentequal1]=T
+tir$tirseqSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))    
+tir$tirseqRCSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqRCSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+			       
+			       
+			       
+			       
