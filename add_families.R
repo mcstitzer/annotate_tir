@@ -2,6 +2,7 @@ library(data.table)
 library(rtracklayer)
 library(stringr)
 library(dplyr)
+library(stringr)
 
 #tir=fread('~/Downloads/tir_B73_2018-07-26_extra.txt')
 
