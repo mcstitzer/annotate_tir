@@ -298,7 +298,7 @@ tirm$closestTSDoffset=NA ## this is the offset from the perfect TIR edge
 for(tirposoffset in 0:20){
 	tsdadjacentup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tirm$tirstartup[x]-1 -tirposoffset ))
 	tsdadjacentdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x]) + tirm$tsdlen[x] -1 +tirposoffset ))
-	tsdadjacentequal=tsdadjacentup == tsdadjacentdown
+	tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tsdadjacentequal !=''
 	print(sum(tsdadjacentequal))
 	tirm$closestTSDseq[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
 	tirm$closestTSDoffset[tsdadjacentequal & is.na(tirm$closestTSDoffset)]=tirposoffset
