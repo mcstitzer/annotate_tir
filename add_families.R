@@ -104,4 +104,37 @@ write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.', SHORTNAME, '.C
 ## need to assign family based on REDUCED MTEC FAMS!
 #### there are way too many similar seqs, so same region called to different families.
 
+mtec=read.table('~/projects/tir_modified_mcs/mtec/MTEC_TIR.8080.fnodes')
+mtec$famname=paste0(substr(mtec$V2,1,3), substr(mtec$V2,7,11))
+mtec$collapsedfamname=sapply(1:nrow(mtec), function(x) sort(mtec$famname[mtec$V1==mtec$V1[x]])[1])
 
+                             
+## this is concerning - some families collapse across superfamilies.
+mtec[substr(mtec$famname,1,3)!=substr(mtec$collapsedfamname,1,3),]
+#### looking carefully, these sequences are nearly identical :(
+## and more look like mutator (have a 9 bp TSD next door)                             
+sum(tir$fam=='DTA00166' & tir$tsdadjacentequal)
+sum(tir$fam=='DTA00273' & tir$tsdadjacentequal)
+sum(tir$fam=='DTM00555' & tir$tsdadjacentequal)                            
+### this fam doesn't get pulled in so maybe we don't care??
+sum(tir$fam=='DTA00050' & tir$tsdadjacentequal)                           
+sum(tir$fam=='DTM06396' & tir$tsdadjacentequal)                           
+
+## manually change the first one to Mutator, as it appears it must be that (9 bp tsd, more G-rich terminal inverted repeats)
+mtec$collapsedfamname[mtec$V1=='MTEC000019']='DTM00555'
+                             
+                             
+### output info on collapsed families
+collapsed=mtec[mtec$famname!=mtec$collapsedfamname,2:4]
+names(collapsed)=c('mtec_fasta_name', 'mtec_name', 'family_added_to')
+write.table(collapsed, '~/projects/tir_modified_mcs/mtec/MTEC_families_collapsed_into_other_families.txt', row.names=F, col.names=T, quote=F, sep='\t')
+
+
+  
+  
+  
+  
+  
+  
+  
+  
