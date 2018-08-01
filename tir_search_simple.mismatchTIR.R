@@ -7,6 +7,8 @@ library(BSgenome)       # Provides getSeq()
 library(GenomicRanges)  # Provides GRanges, etc
 library(rtracklayer)    # Provides import() and export()
 library(data.table)
+library(stringdist)
+library(stringr)
 
 
 ## read in refgen
@@ -306,15 +308,24 @@ for(tirposoffset in 0:20){
 			 
 ### next, have to put in these offsets into the actual positions! and include the TSD sequence
 ### then, check the TIRs they suggest, and see how many mismatches			       
+
 			       
-## start to check TIR proposed by these new TSDs
-#### replace with these new values of semi-shifted TIR coordinates - if TSD is pallindromic, it will be incorporated to the TIR. We don't want this!		    
-tir$tsdadjacentup[tir$tsdadjacentequal1]=tir$tsdadjacentup1[tir$tsdadjacentequal1]			    			    
-tir$tsdadjacentdown[tir$tsdadjacentequal1]=tir$tsdadjacentdown1[tir$tsdadjacentequal1]			    			    
-tir$tsdadjacentequal[tir$tsdadjacentequal1]=T
-tir$tirseqSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))    
-tir$tirseqRCSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqRCSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+tirm$tirstartup.adj=tirm$tirstartup
+tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartup-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
+#### Don't do this - dumb! the TIR length changes in the positive direction, so adjusting downstream doesn't matter.
+#tirm$tirstartdown.adj=tirm$tirstartdown
+#tirm$tirstartdown.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartdown-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
 			       
 			       
+#Check candidate TIRs
+tirm$adjustedTIRup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
+						  
+tirm$adjustedTIRdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
+
+tirm$adjustedTIRdownRC=NA
+tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))))
+
+tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
+
 			       
 			       
