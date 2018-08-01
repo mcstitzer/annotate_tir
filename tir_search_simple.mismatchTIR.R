@@ -296,14 +296,17 @@ tirm=tirm[tirm$tirstartup != -1,]
 tirm$closestTSDseq=NA    ## this is the sequence of the matching TSD
 tirm$closestTSDoffset=NA ## this is the offset from the perfect TIR edge
 for(tirposoffset in 0:20){
-	tsdadjacentup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tir$tirstartup[x]-1 -tirposoffset ))
-	tsdadjacentdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 +tirposoffset ))
+	tsdadjacentup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tirm$tirstartup[x]-1 -tirposoffset ))
+	tsdadjacentdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x]) + tirm$tsdlen[x] -1 +tirposoffset ))
 	tsdadjacentequal=tsdadjacentup == tsdadjacentdown
+	print(sum(tsdadjacentequal))
 	tirm$closestTSDseq[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
-	tirm$closestTSDoffset[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tirposoffset
+	tirm$closestTSDoffset[tsdadjacentequal & is.na(tirm$closestTSDoffset)]=tirposoffset
 	}
 			 
-			 
+### next, have to put in these offsets into the actual positions! and include the TSD sequence
+### then, check the TIRs they suggest, and see how many mismatches			       
+			       
 ## start to check TIR proposed by these new TSDs
 #### replace with these new values of semi-shifted TIR coordinates - if TSD is pallindromic, it will be incorporated to the TIR. We don't want this!		    
 tir$tsdadjacentup[tir$tsdadjacentequal1]=tir$tsdadjacentup1[tir$tsdadjacentequal1]			    			    
