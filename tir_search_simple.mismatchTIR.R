@@ -268,10 +268,11 @@ write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.Chr.gff3'), col.n
 
 ### 
 						
-						
-#########################						
-#### TIR mismatches  ####
-#########################
+#############################################################################################################################						
+#############################################################################################################################					
+#### TIR mismatches  ########################################################################################################
+#############################################################################################################################
+#############################################################################################################################
 tirm=tir[!tir$tsdadjacentequal & !tir$tirsmatch,]
 
 ## deal with pesky multiple TIRs by removing them here. 
@@ -327,7 +328,12 @@ tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(
 
 tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
 
+		    
+## either filter by those with TIRs <0.2 distant from each other		    
 tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)-nchar(tirm$tirseqSingle))*0.2,]
+## or those with new extension of TIR <0.2 distant from each other
+tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup))*0.2,]
+		    
 		    
 ############
 ## Now, adjust positions to put them back on the same scale as the genome!!!
@@ -358,3 +364,60 @@ levels(ddm$tirm.chrnew)[1:10]=paste0('Chr', levels(ddm$tirm.chrnew)[1:10])
 write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 ### need to redo with the multiple possible TIRs			       
+
+						  
+						  
+						  
+#######################################################################################
+### actually deal with pesky multiple TIRs by searching each for a TSD here.     ######
+#######################################################################################
+
+temp=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
+#		     print(x)
+		    tirseq=as.character(tirm$tirseq[[x]])
+		    tirseqRC=sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
+                    upposns = as.numeric(sapply(tirseq, function(tirF) regexpr(tirF, tirm$upstreamExtra[x])))
+#                    downposns=as.numeric(sapply(tir$tirseqRC[[x]], function(te) regexpr(te, tir$downstreamExtra[x])))
+                    downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tirm$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) ## this should be the END of the TIR/TE!!!
+                    uptsds=sapply(upposns, function(uppos) substr(tirm$upstreamExtra[x], uppos - tirm$tsdlen[x], uppos-1))
+                    downtsds=sapply(1:length(downposns), function(downpos) substr(tirm$downstreamExtra[x], downposns[downpos] , downposns[downpos]  + tirm$tsdlen[x] -1)) # was double counting tir length??
+		    tsdsequal= uptsds==downtsds & uptsds!='' & downtsds!='' ## account for empty seqs
+                    tsdtirjunctionpresent=sapply(1:length(upposns), function(index)  ## useBytes=T in grepl so there aren't locale errors when introducing weird characters with negative ranges
+								grepl(paste0(uptsds[[index]], tirseq[index]), tirm$upstreamExtra[x], useBytes=T) & 
+								grepl(paste0(tryCatch({as.character(reverseComplement(DNAString(tirseq[index])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), downtsds[index]), tirm$downstreamExtra[x], useBytes=T))
+### this is where the for loop goes to look through adjacent TSDs that could be possible and then look for a better TIR!!!!!!!!!!!
+				     
+		    closestTSDseq=rep(NA, nrow(tirm))    ## this is the sequence of the matching TSD
+		    closestTSDoffset=rep(NA, nrow(tirm)) ## this is the offset from the perfect TIR edge
+		    for(tirposoffset in 0:20){
+			tsdadjacentup=sapply(upposns, function(y) substr(tirm$upstreamExtra[y], tirm$tirstartup[y] - tirm$tsdlen[y]-tirposoffset , tirm$tirstartup[y]-1 -tirposoffset ))
+			tsdadjacentdown=sapply(downposns, function(y) substr(tirm$downstreamExtra[y], tirm$tirstartdown[y]  + nchar(tirm$tirseqSingle[y])+tirposoffset , tirm$tirstartdown[y]  + nchar(tirm$tirseqSingle[y]) + tirm$tsdlen[y] -1 +tirposoffset ))
+			tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tsdadjacentequal !=''
+			print(sum(tsdadjacentequal))
+			closestTSDseq[tsdadjacentequal & is.na(closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
+			closestTSDoffset[tsdadjacentequal & is.na(closestTSDoffset)]=tirposoffset
+			}
+
+		    return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent, tirseqRC))
+                    })
+
+## okay, so not inconsequential number of copies with multiple possible adjacent TIRs
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]]))) ## this is always at least 2, because there are at least 2 TIR candidates here!
+table(sapply(1:length(temp), function(x) any(temp[[x]][[7]]))) # the only one left is the exclamation point disaster - ignore it??
+## oh wait, this needs to be both adjacent AND equal to each other
+table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]] & temp[[x]][[6]])))
+
+
+######## PICK ONE from temp to add to tir's columns!
+## replace multis with the best TIR, abandoning those with >1 best TIR/TSD pair
+tir$tirseqSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[1]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[8]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+#tir$tsdseq[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdadjacentup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+#tir$tsdtirjunctionpresent[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+#tir$tsdstartup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[3]][temp[[x]][[7]] & temp[[x]][[6]]], -1))
+#tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[4]][temp[[x]][[7]] & temp[[x]][[6]]]-nchar(temp[[x]][[1]][1]), -1))
+
+				
