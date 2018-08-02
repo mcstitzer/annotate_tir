@@ -404,10 +404,37 @@ checkTIRcandidateforTSD=function(tirseq, upstreamExtra, downstreamExtra, tsdlen,
 		}
 	}
 
-
+checkTIRcandidateforOffsetTSD=function(tirseqSingle, upstreamExtra, downstreamExtra, offset=0, tsdlen){
+	tirseqRCSingle=tryCatch({as.character(reverseComplement(DNAString(tirseq)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')})
+	tirstartup=as.numeric(regexpr(tirseqSingle, upstreamExtra))
+	tirstartdown=as.numeric(regexpr(tirseqRCSingle, downstreamExtra))
+	upposn=tirstartup-offset
+	downposn=tirstartdown + nchar(tirseq) + offset
+	uptsd=substr(upstreamExtra, upposn-tsdlen, upposn-1)
+	downtsd=substr(downstreamExtra, downposn, downposn + tsdlen -1)
+	tsdsequal= uptsd==downtsd & uptsd!=''
+	if(tsdsequal){
+		return(list(closestTSDoffset=offset, closestTSDseq=uptsd, tirstartup=upposn, tirstartdown=tirstartdown))
+		}else{
+		return(list(closestTSDoffset=NA, closestTSDseq=NA, tirstartup=NA, tirstartdown=NA))
+		}
+	}
 
 tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=NA    ## this is the sequence of the matching TSD
 tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=NA ## this is the offset from the perfect TIR edge
+						  
+tempm=sapply(which(sapply(tirm$tirseq, length)>1), function(x) {
+	tirseqs=as.character(tirm$tirseq[[x]])
+	offset=-1
+	while(is.na(tirm$closestTSDseq[x])){ ## idea is to keep going until one works!
+		offset=offset+1
+		tircands=data.frame(sapply(1:length(tirseqs), function(tirseqcand) checkTIRcandidateforOffsetTSD(tirseqcand, tirm$upstreamExtra[x], tirm$downstreamExtra[x], offset=offset, tsdlen=tirm$tsdlen[x]))
+		
+#	
+
+		}
+	}
+
 ## this doesn't get stored anywhere, just updates tirm
 tempm=sapply(which(sapply(tirm$tirseq, length)>1), function(x) {
 	tirseqs=as.character(tirm$tirseq[[x]])
