@@ -441,34 +441,14 @@ tempm=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
 tirmworking=as.data.frame(do.call(rbind, tempm))
 					 
 					 
-
-## this doesn't get stored anywhere, just updates tirm
-tempm=sapply(which(sapply(tirm$tirseq, length)>1), function(x) {
-	tirseqs=as.character(tirm$tirseq[[x]])
-	closestTSDseq=NA
-	closestTSDoffset=NA
-	tirstartup.adj=0
-	for(tirposoffset in 0:20){
-		potentialTIRs=sapply(tirseqs, function(atir) checkTIRcandidateforTSD(tirseq=atir, upstreamExtra=tirm$upstreamExtra[x], downstreamExtra=tirm$downstreamExtra[x], tsdlen=tirm$tsdlen[x], offset=tirposoffset))
-		if(is.na(tirm$closestTSDseq[x]) & sum(potentialTIRs[5,]!='')==1){ ## this means we need to add a TSD
-			closestTSDseq=potentialTIRs[5,]
-			closestTSDoffset=tirposoffset
-			tirstartup.adj=0
-##			return(list(potentialTIRs[[5]], tirposoffset, potentialTIRs[[3]]))
-#			tirm$closestTSDseq[x]=potentialTIRs[[5]]
-#			tirm$closestTSDoffset[x]=tirposoffset
-#			tirm$tirstartup.adj[x]=potentialTIRs[[3]]
-				     }###else{return(list('', NA, -1))}
-				     }
-				     return(list(closestTSDseq, closestTSDoffset,tirstartup.adj))
-				     }
-	)
 		
-tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=tempm[1,]
-tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=as.numeric(tempm[3,])
+tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=tirmworking[,'closestTSDseq']
+tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=tirmworking[,'closestTSDoffset']
+tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]=tirmworking$tirstartup
+tirm$tirstartdown[which(sapply(tirm$tirseq, length)>1)]=tirmworking$tirstartdown
 ## essentially redoing this now that we have better candidates
-tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=(tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]-as.numeric(tempm[2,]))
-
+tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=(tirmworking$tirstartup-as.numeric(tirmworking$closestTSDoffset))
+### HERE, I can redo everything! And not do it above.
 #Check candidate TIRs
 tirm$adjustedTIRup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
 tirm$adjustedTIRdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
