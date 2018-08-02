@@ -77,28 +77,14 @@ SHORTNAME='Zm00001d' ## for b73
 #SHORTNAME='Zm00004b'  ## for w22
 
 ## assign 8digit family name (RL.XXXXX) and 10 digit copy name (B73v4XXXXX)
-mcols(tir.gr)$Name=NULL
-for (x in names(table(mcols(tir.gr)$famname))){
-  mcols(tir.gr)$Name[mcols(tir.gr)$famname==x & !is.na(mcols(tir.gr)$famname)]=paste(SHORTNAME, str_pad(1:sum(mcols(tir.gr)$famname[!is.na(mcols(tir.gr)$famname)]==x), 5, pad='0'),sep='')
-}
-
-tir.gr$sup=substr(tir.gr$mtec, 1,3)
-tir.gr$ID=paste0(tir.gr$famname, tir.gr$Name)
-
-
-GENOMENAME='B73'
-#GENOMENAME='W22'
-### end -1 for gff3 format!
-d=data.frame(chr=seqnames(tir.gr), 'TARGeT', 'terminal_inverted_repeat_element', start(tir.gr), end(tir.gr), '.', strand(tir.gr), '.', Name=paste0('ID=', tir.gr$ID, ';Name=', tir.gr$ID, '_', tir.gr$TSD, '_', tir.gr$TIR))
-#d=d[tir$tsdadjacentequal & tir$tirsmatch,]
-#write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-#write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(d, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.', SHORTNAME, '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-
-## for maizegdb with Chr
-dd=d						
-levels(dd$chr)[1:10]=paste0('Chr', levels(dd$chr)[1:10])	
-write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.', SHORTNAME, '.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+#mcols(tir.gr)$Name=NULL
+#for (x in names(table(mcols(tir.gr)$famname))){
+#  mcols(tir.gr)$Name[mcols(tir.gr)$famname==x & !is.na(mcols(tir.gr)$famname)]=paste(SHORTNAME, str_pad(1:sum(mcols(tir.gr)$famname[!is.na(mcols(tir.gr)$famname)]==x), 5, pad='0'),sep='')
+#}
+#
+#tir.gr$sup=substr(tir.gr$mtec, 1,3)
+#tir.gr$ID=paste0(tir.gr$famname, tir.gr$Name)
+#
 
 
 ## need to assign family based on REDUCED MTEC FAMS!
@@ -130,11 +116,40 @@ names(collapsed)=c('mtec_fasta_name', 'mtec_name', 'family_added_to')
 write.table(collapsed, '~/projects/tir_modified_mcs/mtec/MTEC_families_collapsed_into_other_families.txt', row.names=F, col.names=T, quote=F, sep='\t')
 
 
+## change families
+tir.gr$updatedfamname=tir.gr$famname
+tir.gr$updatedfamname[tir.gr$famname %in% collapsed$mtec_name]=mapvalues(tir.gr$famname[tir.gr$famname %in% collapsed$mtec_name],
+                                                                  from=collapsed$mtec_name,
+                                                                  to=collapsed$family_added_to, warn_missing=F)
+  
+## assign 8digit family name (RL.XXXXX) and 10 digit copy name (B73v4XXXXX)
+mcols(tir.gr)$Name=NULL
+for (x in names(table(mcols(tir.gr)$updatedfamname))){
+  mcols(tir.gr)$Name[mcols(tir.gr)$updatedfamname==x & !is.na(mcols(tir.gr)$updatedfamname)]=paste(SHORTNAME, str_pad(1:sum(mcols(tir.gr)$updatedfamname[!is.na(mcols(tir.gr)$updatedfamname)]==x), 5, pad='0'),sep='')
+}
+
+## confirm this is 0 to make sure switched correctly                             
+sum(tir.gr$updatedfamname!=substr(tir.gr$ID,1,8))
+                             
+tir.gr$sup=substr(tir.gr$updatedfamname, 1,3)
+tir.gr$ID=paste0(tir.gr$updatedfamname, tir.gr$Name)
   
   
   
-  
-  
-  
+GENOMENAME='B73'
+#GENOMENAME='W22'
+### end -1 for gff3 format!
+d=data.frame(chr=seqnames(tir.gr), 'TARGeT', 'terminal_inverted_repeat_element', start(tir.gr), end(tir.gr), '.', strand(tir.gr), '.', Name=paste0('ID=', tir.gr$ID, ';Name=', tir.gr$ID, '_', tir.gr$TSD, '_', tir.gr$TIR))
+#d=d[tir$tsdadjacentequal & tir$tirsmatch,]
+#write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+#write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(d, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.', SHORTNAME, '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+
+## for maizegdb with Chr
+dd=d
+levels(dd$chr)[1:10]=paste0('Chr', levels(dd$chr)[1:10])	
+write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.', SHORTNAME, '.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+
+
   
   
