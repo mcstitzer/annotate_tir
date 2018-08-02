@@ -405,11 +405,11 @@ checkTIRcandidateforTSD=function(tirseq, upstreamExtra, downstreamExtra, tsdlen,
 	}
 
 checkTIRcandidateforOffsetTSD=function(tirseqSingle, upstreamExtra, downstreamExtra, offset=0, tsdlen){
-	tirseqRCSingle=tryCatch({as.character(reverseComplement(DNAString(tirseq)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')})
+	tirseqRCSingle=tryCatch({as.character(reverseComplement(DNAString(tirseqSingle)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')})
 	tirstartup=as.numeric(regexpr(tirseqSingle, upstreamExtra))
 	tirstartdown=as.numeric(regexpr(tirseqRCSingle, downstreamExtra))
 	upposn=tirstartup-offset
-	downposn=tirstartdown + nchar(tirseq) + offset
+	downposn=tirstartdown + nchar(tirseqSingle) + offset
 	uptsd=substr(upstreamExtra, upposn-tsdlen, upposn-1)
 	downtsd=substr(downstreamExtra, downposn, downposn + tsdlen -1)
 	tsdsequal= uptsd==downtsd & uptsd!=''
@@ -423,17 +423,24 @@ checkTIRcandidateforOffsetTSD=function(tirseqSingle, upstreamExtra, downstreamEx
 tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=NA    ## this is the sequence of the matching TSD
 tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=NA ## this is the offset from the perfect TIR edge
 						  
-tempm=sapply(which(sapply(tirm$tirseq, length)>1), function(x) {
-	tirseqs=as.character(tirm$tirseq[[x]])
-	offset=-1
-	while(is.na(tirm$closestTSDseq[x])){ ## idea is to keep going until one works!
-		offset=offset+1
-		tircands=data.frame(sapply(1:length(tirseqs), function(tirseqcand) checkTIRcandidateforOffsetTSD(tirseqcand, tirm$upstreamExtra[x], tirm$downstreamExtra[x], offset=offset, tsdlen=tirm$tsdlen[x]))
-		
-#	
-
-		}
+tempm=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
+	allcombos=expand.grid(as.character(tirm$tirseq[[x]]), 0:20)
+	colnames(allcombos)=c('tirseq', 'offset')
+	allcombos$tirseq=as.character(allcombos$tirseq)
+	allcombos$closestTSDseq=NA
+	tircands=data.frame(t(data.frame(sapply(1:nrow(allcombos), function(tirseqcand) checkTIRcandidateforOffsetTSD(tirseqSingle=allcombos$tirseq[tirseqcand], tirm$upstreamExtra[x], tirm$downstreamExtra[x], offset=allcombos$offset[tirseqcand], tsdlen=tirm$tsdlen[x])))))
+	if(sum(!is.na(tircands$closestTSDseq))==1){
+		tempstore=tircands[!is.na(tircands$closestTSDseq),]
+	}else{tempstore=tircands[1,]
+	      tempstore[1,]=c(NA,NA,NA,NA)
+	     }
 	}
+	)
+## this is a data frame of closestTSDoffset, closestTSDseq, tirstartup, and tirstartdown.
+##  there's one entry for each tirm that has more than one potential TIR, but many are NA
+tirmworking=as.data.frame(do.call(rbind, tempm))
+					 
+					 
 
 ## this doesn't get stored anywhere, just updates tirm
 tempm=sapply(which(sapply(tirm$tirseq, length)>1), function(x) {
