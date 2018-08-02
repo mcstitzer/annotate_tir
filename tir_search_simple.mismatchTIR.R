@@ -305,7 +305,7 @@ tirm$closestTSDoffset=NA ## this is the offset from the perfect TIR edge
 for(tirposoffset in 0:20){
 	tsdadjacentup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tirm$tirstartup[x]-1 -tirposoffset ))
 	tsdadjacentdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x]) + tirm$tsdlen[x] -1 +tirposoffset ))
-	tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tsdadjacentequal !=''
+	tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tirm$tsdadjacentequal !=''
 	print(sum(tsdadjacentequal))
 	tirm$closestTSDseq[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
 	tirm$closestTSDoffset[tsdadjacentequal & is.na(tirm$closestTSDoffset)]=tirposoffset
@@ -387,7 +387,64 @@ write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.Chr.gff
 ### actually deal with pesky multiple TIRs by searching each for a TSD here.     ######
 #######################################################################################
 
-temp=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
+						  
+checkTIRcandidateforTSD=function(tirseq, upstreamExtra, downstreamExtra, tsdlen, offset=0){
+	tirseqRC=tryCatch({as.character(reverseComplement(DNAString(tirseq)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')})
+	upposn=as.numeric(regexpr(tirseq, upstreamExtra))-offset
+	downposn=as.numeric(regexpr(tirseqRC, downstreamExtra)) + nchar(tirseq)+offset
+	uptsd=substr(upstreamExtra, upposn-tsdlen, upposn-1)
+	downtsd=substr(downstreamExtra, downposn, downposn + tsdlen -1)
+	tsdsequal=uptsd==downtsd & uptsd != ''
+#	tsdtirjunctionpresent=grepl(paste0(uptsd, tirseq), upstreamExtra, useBytes=T) & 
+#			      grepl(paste0(tirseqRC, downtsd), downstreamExtra, useBytes=T)
+	if(tsdsequal){
+		return(list(tirseq, tirseqRC, upposn, downposn, uptsd, offset))
+		}else{
+		return(list('', '', -1, -1, '', 0))
+		}
+	}
+
+
+
+tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=NA    ## this is the sequence of the matching TSD
+tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=NA ## this is the offset from the perfect TIR edge
+## this doesn't get stored anywhere, just updates tirm
+tempm=sapply(which(sapply(tirm$tirseq, length)>1), function(x) {
+	tirseqs=as.character(tirm$tirseq[[x]])
+	closestTSDseq=NA
+	closestTSDoffset=NA
+	tirstartup.adj=0
+	for(tirposoffset in 0:20){
+		potentialTIRs=sapply(tirseqs, function(atir) checkTIRcandidateforTSD(tirseq=atir, upstreamExtra=tirm$upstreamExtra[x], downstreamExtra=tirm$downstreamExtra[x], tsdlen=tirm$tsdlen[x], offset=tirposoffset))
+		if(is.na(tirm$closestTSDseq[x]) & sum(potentialTIRs[5,]!='')==1){ ## this means we need to add a TSD
+			closestTSDseq=potentialTIRs[5,]
+			closestTSDoffset=tirposoffset
+			tirstartup.adj=0
+##			return(list(potentialTIRs[[5]], tirposoffset, potentialTIRs[[3]]))
+#			tirm$closestTSDseq[x]=potentialTIRs[[5]]
+#			tirm$closestTSDoffset[x]=tirposoffset
+#			tirm$tirstartup.adj[x]=potentialTIRs[[3]]
+				     }###else{return(list('', NA, -1))}
+				     }
+				     return(list(closestTSDseq, closestTSDoffset,tirstartup.adj))
+				     }
+	)
+		
+tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=tempm[1,]
+tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=as.numeric(tempm[3,])
+## essentially redoing this now that we have better candidates
+tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=(tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]-as.numeric(tempm[2,]))
+
+#Check candidate TIRs
+tirm$adjustedTIRup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
+tirm$adjustedTIRdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
+tirm$adjustedTIRdownRC=NA
+tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))))
+tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
+		
+		
+					  
+tempm=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
 #		     print(x)
 		    tirseq=as.character(tirm$tirseq[[x]])
 		    tirseqRC=sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
@@ -402,37 +459,54 @@ temp=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
 								grepl(paste0(tryCatch({as.character(reverseComplement(DNAString(tirseq[index])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), downtsds[index]), tirm$downstreamExtra[x], useBytes=T))
 ### this is where the for loop goes to look through adjacent TSDs that could be possible and then look for a better TIR!!!!!!!!!!!
 				     
-		    closestTSDseq=rep(NA, nrow(tirm))    ## this is the sequence of the matching TSD
-		    closestTSDoffset=rep(NA, nrow(tirm)) ## this is the offset from the perfect TIR edge
+		    closestTSDseq=rep(NA, length(tirseq))    ## this is the sequence of the matching TSD
+		    closestTSDoffset=rep(NA, length(tirseq)) ## this is the offset from the perfect TIR edge
 		    for(tirposoffset in 0:20){
 			tsdadjacentup=sapply(upposns, function(y) substr(tirm$upstreamExtra[y], tirm$tirstartup[y] - tirm$tsdlen[y]-tirposoffset , tirm$tirstartup[y]-1 -tirposoffset ))
 			tsdadjacentdown=sapply(downposns, function(y) substr(tirm$downstreamExtra[y], tirm$tirstartdown[y]  + nchar(tirm$tirseqSingle[y])+tirposoffset , tirm$tirstartdown[y]  + nchar(tirm$tirseqSingle[y]) + tirm$tsdlen[y] -1 +tirposoffset ))
-			tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tsdadjacentequal !=''
-			print(sum(tsdadjacentequal))
+			tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tsdadjacentup !=''
+#			print(sum(tsdadjacentequal))
 			closestTSDseq[tsdadjacentequal & is.na(closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
 			closestTSDoffset[tsdadjacentequal & is.na(closestTSDoffset)]=tirposoffset
 			}
 
-		    return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent, tirseqRC))
+		    return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent, tirseqRC, closestTSDseq, closestTSDoffset))
                     })
 
 ## okay, so not inconsequential number of copies with multiple possible adjacent TIRs
-table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]]))) ## this is always at least 2, because there are at least 2 TIR candidates here!
-table(sapply(1:length(temp), function(x) any(temp[[x]][[7]]))) # the only one left is the exclamation point disaster - ignore it??
+table(sapply(1:length(tempm), function(x) sum(tempm[[x]][[7]]))) ## this is always at least 2, because there are at least 2 TIR candidates here!
+table(sapply(1:length(tempm), function(x) any(tempm[[x]][[7]]))) # the only one left is the exclamation point disaster - ignore it??
 ## oh wait, this needs to be both adjacent AND equal to each other
-table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]] & temp[[x]][[6]])))
+table(sapply(1:length(tempm), function(x) sum(tempm[[x]][[7]] & tempm[[x]][[6]])))
 
 
 ######## PICK ONE from temp to add to tir's columns!
 ## replace multis with the best TIR, abandoning those with >1 best TIR/TSD pair
-tir$tirseqSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[1]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[8]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tirm$tirseqSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[1]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tirm$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[8]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
 #tir$tsdseq[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tsdadjacentup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+tirm$tsdadjacentup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tirm$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tirm$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
 #tir$tsdtirjunctionpresent[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
 #tir$tsdstartup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[3]][temp[[x]][[7]] & temp[[x]][[6]]], -1))
 #tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[4]][temp[[x]][[7]] & temp[[x]][[6]]]-nchar(temp[[x]][[1]][1]), -1))
 
+			       
+tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=tirm$tirstartup
+tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset) & which(sapply(tirm$tirseq, length)>1)]=(tirm$tirstartup-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
+#### Don't do this - dumb! the TIR length changes in the positive direction, so adjusting downstream doesn't matter.
+#tirm$tirstartdown.adj=tirm$tirstartdown
+#tirm$tirstartdown.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartdown-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
+			       
+			       
+#Check candidate TIRs
+tirm$adjustedTIRup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
+						  
+tirm$adjustedTIRdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
+
+tirm$adjustedTIRdownRC=NA
+tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))))
+
+tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
 				
