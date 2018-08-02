@@ -10,8 +10,12 @@ library(stringr)
 #tir=tir[tir$start.adj-tir$end.adj<0,]
 
 #names(tir)=c('mtec', 'chr', 'start', 'end', 'tirscore', 'V6', 'V7', 'TIR1', 'TIR2')
-tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))[tir$tirsmatch & tir$tsdadjacentequal]
+tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))[tir$tirsmatch & tir$tsdadjacentequal & nchar(tir$tirseqSingle)>=5]## add 5 bp minimum for TIR length, that is Bergamo's
 #mcols(tir.gr)$score=tir$tirscore
+
+### length filters
+tir.gr=tir.gr[width(tir.gr)>=40,]## stowaway mites can be small, using 40 bp as size cutoff. This removes 154 copies from B73.
+
 
 ## okay to overlap if entirely within others - but not adjacent overlaps
 selfOver=findOverlaps(tir.gr, drop.self=T, ignore.strand=T, type='equal')
