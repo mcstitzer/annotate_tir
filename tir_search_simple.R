@@ -251,13 +251,15 @@ GENOMENAME='B73'
 #GENOMENAME='W22'
 ### end -1 for gff3 format!
 d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj-1, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle))
-d=d[tir$tsdadjacentequal & tir$tirsmatch,]
+d=d[tir$tsdadjacentequal & tir$tirsmatch & nchar(tir$tirseqSingle)>=5,] ## add 5 bp minimum for TIR length, that is Bergamo's
+### length filters
+d=d[d[,5]-d[,4]>=40,] ## stowaway mites can be small, using 40 bp as size cutoff. This removes 154 copies from B73.
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 write.table(d, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 ## for maizegdb with Chr
-dd=d						
+dd=d
 levels(dd$tir.chrnew)[1:10]=paste0('Chr', levels(dd$tir.chrnew)[1:10])	
 write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 						
