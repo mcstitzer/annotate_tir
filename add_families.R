@@ -9,12 +9,15 @@ library(stringr)
 #tir=tir[,c('mtec', 'chr', 'start.adj', 'end.adj', 'tirseqSingle', 'tsdadjacentup', 'fam', 'sup')]
 #tir=tir[tir$start.adj-tir$end.adj<0,]
 
+## filters
+filters=tir$tirsmatch & tir$tsdadjacentequal & nchar(tir$tirseqSingle)>=5 & tir$end.adj-tir$start.adj>=40
+
 #names(tir)=c('mtec', 'chr', 'start', 'end', 'tirscore', 'V6', 'V7', 'TIR1', 'TIR2')
-tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))[tir$tirsmatch & tir$tsdadjacentequal & nchar(tir$tirseqSingle)>=5]## add 5 bp minimum for TIR length, that is Bergamo's
+tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))[filters]## add 5 bp minimum for TIR length, that is Bergamo's
 #mcols(tir.gr)$score=tir$tirscore
 
-### length filters
-tir.gr=tir.gr[width(tir.gr)>=40,]## stowaway mites can be small, using 40 bp as size cutoff. This removes 154 copies from B73.
+### length filters - incorporated into filters above!
+#tir.gr=tir.gr[width(tir.gr)>=40,]## stowaway mites can be small, using 40 bp as size cutoff. This removes 154 copies from B73.
 
 
 ## okay to overlap if entirely within others - but not adjacent overlaps
@@ -32,14 +35,14 @@ rmRows=sapply(1:length(selfOver), function(x){
 
 
 tir.gr=tir.gr[-rmRows,]
-tir.gr$mtec=tir$mtec[tir$tirsmatch & tir$tsdadjacentequal][-rmRows]
+tir.gr$mtec=tir$mtec[filters][-rmRows]
 tir.gr$mtecfamnum=substr(tir.gr$mtec, 7,11)
 tir.gr$sup=substr(tir.gr$mtec, 1, 3)
 tir.gr$famname=paste(tir.gr$sup, tir.gr$mtecfamnum, sep='')
-tir.gr$TSD=tir$tsdadjacentup[tir$tirsmatch & tir$tsdadjacentequal][-rmRows]
-tir.gr$TIR=tir$tirseqSingle[tir$tirsmatch & tir$tsdadjacentequal][-rmRows]
+tir.gr$TSD=tir$tsdadjacentup[filters][-rmRows]
+tir.gr$TIR=tir$tirseqSingle[filters][-rmRows]
 
-strand(tir.gr)=tir$strand[tir$tirsmatch & tir$tsdadjacentequal][-rmRows]
+strand(tir.gr)=tir$strand[filters][-rmRows]
 
 
 ## okay, now get the ones that overlap partially
