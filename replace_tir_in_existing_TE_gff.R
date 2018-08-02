@@ -50,7 +50,7 @@ filtTE$sup=NULL
 
 filtTE=sort(sortSeqlevels(filtTE), ignore.strand=T)
 
-export.gff3(filtTE, paste0(GENOMENAME,  '.', Sys.Date(), '.allTE.gff3')
+export.gff3(filtTE, paste0(GENOMENAME,  '.', Sys.Date(), '.allTE.gff3'))
 
 
 
