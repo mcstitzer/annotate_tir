@@ -422,8 +422,12 @@ checkTIRcandidateforOffsetTSD=function(tirseqSingle, upstreamExtra, downstreamEx
 
 tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=NA    ## this is the sequence of the matching TSD
 tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=NA ## this is the offset from the perfect TIR edge
+
 						  
-tempm=lapply(which(sapply(tirm$tirseq, length)>1), function(x) {
+						  
+## this works, but is running out of memory?? So loop through and do in chunks.
+for(i in split(which(sapply(tirm$tirseq, length)>1), ceiling(seq_along(which(sapply(tirm$tirseq, length)>1))/1000))){
+tempm=lapply(i, function(x) {
 	allcombos=expand.grid(as.character(tirm$tirseq[[x]]), 0:20)
 	colnames(allcombos)=c('tirseq', 'offset')
 	allcombos$tirseq=as.character(allcombos$tirseq)
@@ -442,10 +446,13 @@ tirmworking=as.data.frame(do.call(rbind, tempm))
 					 
 					 
 		
-tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)]=tirmworking[,'closestTSDseq']
-tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=tirmworking[,'closestTSDoffset']
-tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]=tirmworking$tirstartup
-tirm$tirstartdown[which(sapply(tirm$tirseq, length)>1)]=tirmworking$tirstartdown
+tirm$closestTSDseq[i]=tirmworking[,'closestTSDseq']
+tirm$closestTSDoffset[i]=tirmworking[,'closestTSDoffset']
+tirm$tirstartup[i]=tirmworking$tirstartup
+tirm$tirstartdown[i]=tirmworking$tirstartdown
+					 
+}					 
+					 
 ## essentially redoing this now that we have better candidates
 tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=(tirmworking$tirstartup-as.numeric(tirmworking$closestTSDoffset))
 ### HERE, I can redo everything! And not do it above.
