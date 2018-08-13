@@ -21,8 +21,15 @@ seqs=readDNAStringSet('../agpv4_te_annotation/ncbi_pseudomolecule/B73V4.both_pse
 ## or outside: grep -h ">" */*/*.genomic > all_b73_tir_target_matches.txt
 ### or grep -h ">" */*/*.genomic > all_w22_tir_target_matches.txt
 
+
+## split into chunks! split -l 1000000  all_w22_tir_target_matches.txt
+## makes files! xaa  xab  xac  xad  xae  xaf  xag  xah  
+
+for(i in c('xaa', 'xab', 'xac', 'xad', 'xae', 'xaf', 'xag', 'xah')){
 #a=fread('all_b73_tir_target_matches.txt', header=F)
-a=fread('all_w22_tir_target_matches.txt', header=F)
+#a=fread('all_w22_tir_target_matches.txt', header=F)
+a=fread(i, header=F)
+	
 #a=fread('all_w22_mtec_tir_target_matches.txt', header=F) ## this is just MTEC
 a$mtec=gsub('Query:', '', a$V2)
 a$chr=gsub('Sbjct:', '', a$V3)
@@ -37,6 +44,8 @@ dm=fread('detectMITE_positions_tirtsd.txt', header=T)
 tir=a[,c('mtec', 'chr', 'start', 'end', 'direction')]
 
 tir$chrnew=tir$chr ## not needed anymore, but so as not to change the names later, changing here.
+tir$source=ifelse(grepl('B73v4', tir$mtec), 'detectMITE', 'TARGeT')
+
 
 ## which TSD lengths do we expect for each superfamily?
 ## just changed DTM to 9 bp TSD ala Mobile DNA II
@@ -54,8 +63,10 @@ tir$tsdlen[!tir$mtec %in% a$mtec]=as.numeric(as.character(mapvalues(tir$mtec[!ti
 
 
 tir$origlen=tir$end-tir$start ## note that none of these are negative!
+tir$chrmax=as.numeric(as.character(mapvalues(tir$chr, from=names(seqs), to=width(seqs))))
 
 offset=200
+tir=tir[tir$start>offset+2 & tir$end<tir$chrmax-offset-3 & tir$start<tir$chrmax-offset-3 & tir$end>offset+2,]
 tir$upstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))
 tir$downstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset))))
 tir$downstreamExtraRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset)))))
@@ -376,12 +387,12 @@ dm[,4:5]=dm[,4:5]-1
 dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2),]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
 
 ## for maizegdb with Chr
 ddm=dm				
 levels(ddm$tirm.chrnew)[1:10]=paste0('Chr', levels(ddm$tirm.chrnew)[1:10])	
-write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
 
 ### need to redo with the multiple possible TIRs			       
 
@@ -517,9 +528,11 @@ dm[,4:5]=dm[,4:5]-1
 dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2),]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatchAll.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatchAll.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
 
 ## for maizegdb with Chr
 ddm=dm				
 levels(ddm$tirm.chrnew)[1:10]=paste0('Chr', levels(ddm$tirm.chrnew)[1:10])	
-write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatchAll.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatchAll.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
+
+}
