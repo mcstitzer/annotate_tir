@@ -463,11 +463,11 @@ tirm$tirstartdown=unlist(tirm$tirstartdown)
 tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=(tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]-as.numeric(tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]))
 ### HERE, I can redo everything! And not do it above. BUT because I sutracted from tirstartup.adj above, don't redo those 1 tir copies here?
 #Check candidate TIRs
-tirm$adjustedTIRup=sapply(which(sapply(tirm$tirseq, length)>1), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
-tirm$adjustedTIRdown=sapply(which(sapply(tirm$tirseq, length)>1), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
+tirm$adjustedTIRup[which(sapply(tirm$tirseq, length)>1)]=sapply(which(sapply(tirm$tirseq, length)>1), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
+tirm$adjustedTIRdown[which(sapply(tirm$tirseq, length)>1)]=sapply(which(sapply(tirm$tirseq, length)>1), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
 tirm$adjustedTIRdownRC=NA
 tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))))
-tirm$seqdist=sapply(which(sapply(tirm$tirseq, length)>1), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
+tirm$seqdist[which(sapply(tirm$tirseq, length)>1)]=sapply(which(sapply(tirm$tirseq, length)>1), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
 		
 #### SO NOW, I THINK I HAVE IT ALL!!!!!!!!!!!!!
 		    
