@@ -499,8 +499,8 @@ tirm$end.adj[tirm$origlen <= 2*offset ]=   sapply(which(tirm$origlen <= 2*offset
 ## check that i have what i think i have
 ################						
 
-tirm$tiradjustedupinseq=as.character(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$start.adj, end=tirm$start.adj+nchar(tirm$adjustedTIRup)-1))))				
-tirm$tiradjusteddowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$end.adj-nchar(tirm$adjustedTIRup)+1, end=tirm$end.adj)))))
+tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
+tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))
 																		      
 tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 
@@ -508,7 +508,7 @@ tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjust
 						  
 dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
 ### this concerns me!!!
-dm[,4:5]=dm[,4:5]-1
+#dm[,4:5]=dm[,4:5]-1
 dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2),]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
