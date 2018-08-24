@@ -12,7 +12,9 @@ library(stringr)
 
 
 ## read in refgen
-seqs=readDNAStringSet('../agpv4_te_annotation/ncbi_pseudomolecule/B73V4.both_pseudo_AND_unplaced.fa')
+#seqs=readDNAStringSet('../agpv4_te_annotation/ncbi_pseudomolecule/B73V4.both_pseudo_AND_unplaced.fa')
+seqs=readDNAStringSet('~/projects/maize_te_counts/mapping/Zea_mays.AGPv4.dna.toplevel.fa')
+names(seqs)=str_split_fixed(names(seqs), ' ', 2)[,1]
 #seqs=readDNAStringSet('../../../W22__Ver12.fasta')
 
 ## read in all output 
