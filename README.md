@@ -24,5 +24,5 @@ CAGGG
 
 1. `tir_search_simple.R`
 2. `add_families.R` not great documentation of how to get source
-3. `tir_search_simple.mismatchTIR.R` 
+3. `tir_search_simple.mismatchTIR.R` - NOTE that this has to be on UNIX (even using R) because I'm having locale issues I haven't been able to resolve on my Mac.
 4. `add_families.mismatch.R` uses output from #2
