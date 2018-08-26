@@ -469,13 +469,14 @@ tirm$tirstartdown=unlist(tirm$tirstartdown)
 					 
 ## essentially redoing this now that we have better candidates
 tirm$tirstartup.adj=(tirm$tirstartup-as.numeric(tirm$closestTSDoffset))
+tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
 ### HERE, I can redo everything! And not do it above. BUT because I sutracted from tirstartup.adj above, don't redo those 1 tir copies here?
 #Check candidate TIRs
 tirm$adjustedTIRup=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
 tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1), mc.cores=ncores))
 tirm$adjustedTIRdownRC=NA
 tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=unlist(mclapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))), mc.cores=ncores))
-tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'), mc.cores=ncores))
+tirm$seqdist=unlist(mclapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'), mc.cores=ncores))
 		
 #### SO NOW, I THINK I HAVE IT ALL!!!!!!!!!!!!!
 		    
@@ -511,10 +512,11 @@ tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GR
 tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))																		      
 tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 
-						  
+tirm[!is.na(tirm$closestTSDoffset) & !tirm$tirsadjustedmatch,]
+
 ### this is bad, but I can't come up with a solution. 
-tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] -1
-#tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] -1
+tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] +1
+tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] +1
 	
 ## now recalculate
 tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
