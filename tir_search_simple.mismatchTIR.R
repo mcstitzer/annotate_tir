@@ -415,7 +415,7 @@ checkTIRcandidateforTSD=function(tirseq, upstreamExtra, downstreamExtra, tsdlen,
 checkTIRcandidateforOffsetTSD=function(tirseqSingle, upstreamExtra, downstreamExtra, offset=0, tsdlen){
 	tirseqRCSingle=tryCatch({as.character(reverseComplement(DNAString(tirseqSingle)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')})
 	tirstartup=as.numeric(regexpr(tirseqSingle, upstreamExtra))
-	tirstartdown=as.numeric(regexpr(tirseqRCSingle, downstreamExtra))
+	tirstartdown=as.numeric(regexpr(tirseqRCSingle, downstreamExtra))-1
 	upposn=tirstartup-offset
 	downposn=tirstartdown + nchar(tirseqSingle) + offset
 	uptsd=substr(upstreamExtra, upposn-tsdlen, upposn-1)
