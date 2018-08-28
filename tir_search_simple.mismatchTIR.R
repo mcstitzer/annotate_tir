@@ -349,27 +349,51 @@ tirm$seqdist=unlist(mclapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedT
 tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)-nchar(tirm$tirseqSingle))*0.2,]
 ## or those with new extension of TIR <0.2 distant from each other
 tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup))*0.2,]
-		    
-		    
+
+###############################################
+#### REDEFINE JUST AS FOR PERFECT TIR #########
+###############################################
+tirm$closestTSDseq[tirm$closestTSDseq=='']=NA	## don't want an empty TSD seq to match!!!		     
+			     
+tirm$tirstartup.regex=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(paste0(tirm$closestTSDseq[x], tirm$adjustedTIRup[x]), tirm$upstreamExtra[x]))+nchar(tirm$closestTSDseq[x]), mc.cores=ncores))
+		      
+		      
+## get position of TIR in forward orientation of downstream extract.
+# to do RC: as.character(reverseComplement(DNAString(tirF)))
+## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
+tirm$tirstartdown.regex=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(paste0(tirm$adjustedTIRdown[x], tirm$closestTSDseq[x]), tirm$downstreamExtra[x]))-1, mc.cores=ncores))
+			     
+			     
 ############
 ## Now, adjust positions to put them back on the same scale as the genome!!!
 ############
-##adjust positions
-tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
-######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
+## also have to redo as above!				      
+tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.regex[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
+tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
 
-is.odd <- function(x) x %% 2 != 0
 ## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
-########## EVENS WORK FINE AS IS!!!!
-tirm$start.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset& !is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
+tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 1 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+				      				      
+##adjust positions
+#tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset& !is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
-######### ODDS NEED A MODIFICATION
-tirm$start.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 2 ), mc.cores=ncores))
-######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 3), mc.cores=ncores))
+#tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown.adj[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
+###### no longer needed with new search above
+##is.odd <- function(x) x %% 2 != 0
+### floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
+##  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
+########### EVENS WORK FINE AS IS!!!!
+#tirm$start.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset& !is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
+########## ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
+#tirm$end.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset& !is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+########## ODDS NEED A MODIFICATION
+#tirm$start.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 2 ), mc.cores=ncores))
+########## ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
+#tirm$end.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 3), mc.cores=ncores))
 
 						  
 ################
@@ -379,8 +403,8 @@ tirm$end.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]=   unlist(mclapply
 #tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
 tirm$tiradjustedupinseq=NA
 tirm$tiradjusteddowninseqRC=NA
-tirm$tiradjustedupinseq[!is.na(tirm$start.adj)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$start.adj)], IRanges(start=tirm$start.adj[!is.na(tirm$start.adj)], end=tirm$start.adj[!is.na(tirm$start.adj)]+nchar(tirm$adjustedTIRup[!is.na(tirm$start.adj)])-1))))				
-tirm$tiradjusteddowninseqRC[!is.na(tirm$start.adj)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$start.adj)], IRanges(start=tirm$end.adj[!is.na(tirm$start.adj)]-nchar(tirm$adjustedTIRup[!is.na(tirm$start.adj)])+1, end=tirm$end.adj[!is.na(tirm$start.adj)])))))
+tirm$tiradjustedupinseq[!is.na(tirm$closestTSDseq) & tirm$tirstartup.regex!=-1]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1], IRanges(start=tirm$start.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1], end=tirm$start.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1]+nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1])-1))))				
+tirm$tiradjusteddowninseqRC[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1], IRanges(start=tirm$end.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1]-nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1])+1, end=tirm$end.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1])))))
 																		      
 tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 
