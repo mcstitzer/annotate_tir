@@ -328,7 +328,10 @@ tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartup-tirm$closest
 #### Don't do this - dumb! the TIR length changes in the positive direction, so adjusting downstream doesn't matter.
 #tirm$tirstartdown.adj=tirm$tirstartdown
 #tirm$tirstartdown.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartdown-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
-			       
+### if less than 1, remove
+tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
+tirm$tirstartup.adj[tirm$tirstartup.adj>2*offset]=NA
+
 			       
 #Check candidate TIRs
 tirm$adjustedTIRup=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
@@ -356,11 +359,16 @@ tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) 
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
 tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
 
+is.odd <- function(x) x %% 2 != 0
 ## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
-tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
+tirm$start.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+##
+tirm$start.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
+######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
+tirm$end.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
 
 						  
 ################
@@ -368,9 +376,10 @@ tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <=
 ################						
 #tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
 #tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
-
-tirm$tiradjustedupinseq=as.character(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$start.adj, end=tirm$start.adj+nchar(tirm$adjustedTIRup)-1))))				
-tirm$tiradjusteddowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$end.adj-nchar(tirm$adjustedTIRup)+1, end=tirm$end.adj)))))
+tirm$tiradjustedupinseq=NA
+tirm$tiradjusteddowninseqRC=NA
+tirm$tiradjustedupinseq[!is.na(tirm$start.adj)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$start.adj)], IRanges(start=tirm$start.adj[!is.na(tirm$start.adj)], end=tirm$start.adj[!is.na(tirm$start.adj)]+nchar(tirm$adjustedTIRup[!is.na(tirm$start.adj)])-1))))				
+tirm$tiradjusteddowninseqRC[!is.na(tirm$start.adj)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$start.adj)], IRanges(start=tirm$end.adj[!is.na(tirm$start.adj)]-nchar(tirm$adjustedTIRup[!is.na(tirm$start.adj)])+1, end=tirm$end.adj[!is.na(tirm$start.adj)])))))
 																		      
 tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 
