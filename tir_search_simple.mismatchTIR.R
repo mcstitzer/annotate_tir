@@ -452,7 +452,7 @@ checkTIRcandidateforTSD=function(tirseq, upstreamExtra, downstreamExtra, tsdlen,
 checkTIRcandidateforOffsetTSD=function(tirseqSingle, upstreamExtra, downstreamExtra, offset=0, tsdlen){
 	tirseqRCSingle=tryCatch({as.character(reverseComplement(DNAString(tirseqSingle)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')})
 	tirstartup=as.numeric(regexpr(tirseqSingle, upstreamExtra))
-	tirstartdown=as.numeric(regexpr(tirseqRCSingle, downstreamExtra))-1
+	tirstartdown=as.numeric(regexpr(tirseqRCSingle, downstreamExtra))
 	upposn=tirstartup-offset
 	downposn=tirstartdown + nchar(tirseqSingle) + offset
 	uptsd=substr(upstreamExtra, upposn-tsdlen, upposn-1)
@@ -479,22 +479,23 @@ tempm=mclapply(i, function(x) {
 	allcombos$closestTSDseq=NA
 	tircands=data.frame(t(data.frame(sapply(1:nrow(allcombos), function(tirseqcand) checkTIRcandidateforOffsetTSD(tirseqSingle=allcombos$tirseq[tirseqcand], tirm$upstreamExtra[x], tirm$downstreamExtra[x], offset=allcombos$offset[tirseqcand], tsdlen=tirm$tsdlen[x])))))
 	if(sum(!is.na(tircands$closestTSDseq))==1){
-		tempstore=tircands[!is.na(tircands$closestTSDseq),]
+		tempstore=cbind(tircands[!is.na(tircands$closestTSDseq),], tirseq=allcombos$tirseq[!is.na(tircands$closestTSDseq)])
 	}else{tempstore=tircands[1,]
-	      tempstore[1,]=c(NA,NA,NA,NA)
+	      tempstore[1,]=c(NA,NA,NA,NA,NA)
 	     }
 	}, mc.cores=ncores
 	)
 ## this is a data frame of closestTSDoffset, closestTSDseq, tirstartup, and tirstartdown.
 ##  there's one entry for each tirm that has more than one potential TIR, but many are NA
 tirmworking=as.data.frame(do.call(rbind, tempm))
-					 
+tirmworking$tirseq=as.character(tirmworking$tirseq)
 					 
 		
 tirm$closestTSDseq[i]=tirmworking[,'closestTSDseq']
 tirm$closestTSDoffset[i]=tirmworking[,'closestTSDoffset']
 tirm$tirstartup[i]=tirmworking$tirstartup
 tirm$tirstartdown[i]=tirmworking$tirstartdown
+tirm$tirseqSingle[i]=tirmworking$tirseq
 					 
 }					 
 
@@ -502,16 +503,25 @@ tirm$tirstartdown[i]=tirmworking$tirstartdown
 tirm$closestTSDseq=unlist(tirm$closestTSDseq)
 tirm$closestTSDoffset=unlist(tirm$closestTSDoffset)					 
 tirm$tirstartup=unlist(tirm$tirstartup)
-tirm$tirstartdown=unlist(tirm$tirstartdown)					 
+tirm$tirstartdown=unlist(tirm$tirstartdown)
+tirm$tirseqSingle=unlist(tirm$tirseqSingle)		 
 					 
-## essentially redoing this now that we have better candidates
-tirm$tirstartup.adj=(tirm$tirstartup-as.numeric(tirm$closestTSDoffset))
+					 
+					 
+tirm$tirstartup.adj=tirm$tirstartup
+## the actual adjustment was already done in the loop!!!!
+#tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartup-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
 tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
+tirm$tirstartup.adj[tirm$tirstartup.adj>2*offset]=NA
+
+## essentially redoing this now that we have better candidates
+#tirm$tirstartup.adj=(tirm$tirstartup-as.numeric(tirm$closestTSDoffset))
+#tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
 ### HERE, I can redo everything! And not do it above. BUT because I sutracted from tirstartup.adj above, don't redo those 1 tir copies here?
 #Check candidate TIRs
-tirm$adjustedTIRup=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
-#tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1), mc.cores=ncores))
-tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]+1, tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])), mc.cores=ncores)) ## this minus 1 already subtracted in the regex!!
+tirm$adjustedTIRup=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
+tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))
+#tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]+1, tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])), mc.cores=ncores)) ## this minus 1 already subtracted in the regex!!
 tirm$adjustedTIRdownRC=NA
 tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=unlist(mclapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))), mc.cores=ncores))
 tirm$seqdist=unlist(mclapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'), mc.cores=ncores))
@@ -531,35 +541,75 @@ head(tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup
 ## Now, adjust positions to put them back on the same scale as the genome!!!
 ############
 ##adjust positions
-tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
+#tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))-1 ## worried there is another -1 here - is this because I'm defining differently??
+#tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))-1 ## worried there is another -1 here - is this because I'm defining differently??
 
 ## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
-tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
+#tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))-1
+#tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))-1
 
+###############################################
+#### REDEFINE JUST AS FOR PERFECT TIR #########
+###############################################
+tirm$closestTSDseq[tirm$closestTSDseq=='']=NA	## don't want an empty TSD seq to match!!!		     
+			     
+tirm$tirstartup.regex=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) as.numeric(regexpr(paste0(tirm$closestTSDseq[x], tirm$adjustedTIRup[x]), tirm$upstreamExtra[x]))+nchar(tirm$closestTSDseq[x]), mc.cores=ncores))
+		      
+		      
+## get position of TIR in forward orientation of downstream extract.
+# to do RC: as.character(reverseComplement(DNAString(tirF)))
+## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
+tirm$tirstartdown.regex=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) as.numeric(regexpr(paste0(tirm$adjustedTIRdown[x], tirm$closestTSDseq[x]), tirm$downstreamExtra[x]))-1, mc.cores=ncores))
+			     
+			     
+############
+## Now, adjust positions to put them back on the same scale as the genome!!!
+############
+## also have to redo as above!				      
+tirm$start.adj=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) (tirm$start[x]-offset) + tirm$tirstartup.regex[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
+tirm$end.adj= unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) (tirm$end[x]-offset) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
+
+## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
+#  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
+tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 1 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+				      				      
+					  
+################
+## check that i have what i think i have
+################						
+#tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
+#tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
+tirm$tiradjustedupinseq=NA
+tirm$tiradjusteddowninseqRC=NA
+tirm$tiradjustedupinseq[!is.na(tirm$closestTSDseq) & tirm$tirstartup.regex!=-1]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1], IRanges(start=tirm$start.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1], end=tirm$start.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1]+nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1])-1))))				
+tirm$tiradjusteddowninseqRC[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1], IRanges(start=tirm$end.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1]-nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1])+1, end=tirm$end.adj[!is.na(tirm$closestTSDseq)& tirm$tirstartup.regex!=-1])))))
+																		      
+tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 						  
 ################
 ## check that i have what i think i have
 ################						
 
-tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
-tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))																		      
-tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
+#tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
+#tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))																		      
+#tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 
 tirm[!is.na(tirm$closestTSDoffset) & !tirm$tirsadjustedmatch,]
 
 ### this is bad, but I can't come up with a solution. 
-tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] +1
-tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] +1
+#tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$start.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] +1
+#tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)]=tirm$end.adj[!tirm$tirsadjustedmatch & !is.na(tirm$adjustedTIRup)] +1
 	
 ## now recalculate
-tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
-tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))																		      
-tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
+#tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
+#tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))																		      
+#tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 						  
 						  
 						  
