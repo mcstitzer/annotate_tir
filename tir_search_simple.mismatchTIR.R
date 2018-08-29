@@ -364,7 +364,8 @@ tirm$tirstartup.regex=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regex
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
 tirm$tirstartdown.regex=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(paste0(tirm$adjustedTIRdown[x], tirm$closestTSDseq[x]), tirm$downstreamExtra[x]))-1, mc.cores=ncores))
-			     
+tirm$tirstartup.regex[tirm$tirstartdown.regex==0]=NA ## i use startup.regex as a filter below
+tirm$tirstartdown.regex[tirm$tirstartdown.regex==0]=NA ## you can't subset in R with a 0!     
 			     
 ############
 ## Now, adjust positions to put them back on the same scale as the genome!!!
@@ -377,7 +378,13 @@ tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + t
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
 tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 1 ), mc.cores=ncores))
 tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
-				      				      
+
+## fix short odds
+is.odd <- function(x) x %% 2 != 0				   
+tirm$start.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 2 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 2), mc.cores=ncores))
+							   
+							   
 ##adjust positions
 #tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
@@ -408,12 +415,14 @@ tirm$tiradjusteddowninseqRC[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.
 																		      
 tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 
-						  
+table(tirm$tirsadjustedmatch)						  
 						  
 dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
 ### this concerns me!!!
 dm[,4:5]=dm[,4:5]-1
+#dm=dm[!is.na(dm[,1]),]
 dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2),]
+dm=dm[complete.cases(dm),]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
