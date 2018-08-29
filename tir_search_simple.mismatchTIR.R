@@ -432,7 +432,10 @@ table(tirm$tirsadjustedmatch)
 tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup))*0.2,]
 ## there are some na values in tirm$tirsadjustedmatch that I don't understand, but I can't find a valid TSD/TIR boudary in them by eye, so I think I will drop them.
 						  
-dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
+#dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
+### now removing the -1 from the end coordinate for gff3 format
+dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
+
 ### this concerns me!!!
 #dm[,4:5]=dm[,4:5]-1
 #dm=dm[!is.na(dm[,1]),]
