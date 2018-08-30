@@ -301,7 +301,7 @@ write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.Chr.gff3'), col.n
 #### TIR mismatches  ########################################################################################################
 #############################################################################################################################
 #############################################################################################################################
-tirm=tir[!tir$tsdadjacentequal & !tir$tirsmatch,]
+tirm=tir[!tir$tsdadjacentequal ,] ## now testing tirsmatch doesn't work because I've defined them through a regex so they better be there!
 
 ## deal with pesky multiple TIRs by removing them here. 
 tirm$tirseqSingle=unlist(lapply(tirm$tirseq, function(l) l[[1]]))
