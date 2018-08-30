@@ -213,8 +213,8 @@ tir$tirstartup=tir$tirstartup+nchar(tir$tsdadjacentup)
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
 tir$tirstartdown=NA
 tir$tirstartdown=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tirseqRCSingle[x], tir$tsdadjacentdown[x]), tir$downstreamExtra[x]))-1, mc.cores=ncores))
-			
-			
+tir$tirstartup[tir$tirstartdown==-2]=NA		## use as filter below	
+tir$tirstartdown[tir$tirstartdown==-2]=NA			
 			
 
 ## having an issue with weird characters, removing those that don't have a tir present here.
@@ -278,7 +278,7 @@ table(tir$tirsmatch[tir$tsdadjacentequal])
 GENOMENAME='B73'
 #GENOMENAME='W22'
 ### end -1 for gff3 format!
-d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj-1, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle))
+d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj-1, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle, '_mismatch=0_',tir$tirseqRCSingle))
 d=d[tir$tsdadjacentequal & tir$tirsmatch,]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
