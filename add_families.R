@@ -5,19 +5,55 @@ library(dplyr)
 library(stringr)
 
 #tir=fread('~/Downloads/tir_B73_2018-07-26_extra.txt')
-
+tir=fread('all_tir_B73_2018-08-25_extra.txt')
 #tir=tir[,c('mtec', 'chr', 'start.adj', 'end.adj', 'tirseqSingle', 'tsdadjacentup', 'fam', 'sup')]
 #tir=tir[tir$start.adj-tir$end.adj<0,]
 
+tirmm=import.gff3('B73_tir_2018-08-30.mismatchAll.gff3')
+mmfilt=nchar(str_split_fixed(tirmm$ID, '_', 7)[,5])>=5 & width(tirmm)>=40
+tirmm=tirmm[mmfilt,]
+tirmmcols=str_split_fixed(tirmm$ID, '_', 7)
+tirmm$mtec=sapply(1:length(tirmm), function(x) paste(unlist(tirmmcols[x,1:3]), collapse='_'))
+tirmm$sup=substr(tirmm$mtec, 1, 3)
+tirmm$mtecfamnum=substr(tirmm$mtec,7,11)
+tirmm$famname=paste0(tirmm$sup,tirmm$mtecfamnum)
+tirmm$TSD=tirmmcols[,4]
+tirmm$TIRup=tirmmcols[,5]
+tirmm$TIRmm=tirmmcols[,6]
+tirmm$TIRdown=tirmmcols[,7]
+tirmm.gr=tirmm
+mcols(tirmm.gr)=NULL
+                 
+                  
+                  
 ## filters
 filters=tir$tirsmatch & tir$tsdadjacentequal & nchar(tir$tirseqSingle)>=5 & tir$end.adj-tir$start.adj>=40
 
+tir=tir[filters,]
+  
 #names(tir)=c('mtec', 'chr', 'start', 'end', 'tirscore', 'V6', 'V7', 'TIR1', 'TIR2')
-tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))[filters]## add 5 bp minimum for TIR length, that is Bergamo's
+tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))## add 5 bp minimum for TIR length, that is Bergamo's
 #mcols(tir.gr)$score=tir$tirscore
+
+strand(tir.gr)=tir$strand
+                  
+                  
+origlen=length(tir.gr)
+mmlen=length(tirmm.gr)
 
 ### length filters - incorporated into filters above!
 #tir.gr=tir.gr[width(tir.gr)>=40,]## stowaway mites can be small, using 40 bp as size cutoff. This removes 154 copies from B73.
+
+tir.gr=c(tir.gr,tirmm.gr)
+tir.gr$mtec=c(tir$mtec,tirmm$mtec)
+tir.gr$mtecfamnum=substr(tir.gr$mtec, 7,11)
+tir.gr$sup=substr(tir.gr$mtec, 1, 3)
+tir.gr$famname=paste(tir.gr$sup, tir.gr$mtecfamnum, sep='')
+tir.gr$TSD=c(tir$tsdadjacentup,tirmm$TSD)
+tir.gr$TIRup=c(tir$tirseqSingle, tirmm$TIRup)
+tir.gr$TIRdown=c(rep('NA',nrow(tir)), tirmm$TIRdown)
+tir.gr$TIRmm=c(rep('mismatch=0',nrow(tir)), tirmm$TIRmm)
+
 
 
 ## okay to overlap if entirely within others - but not adjacent overlaps
@@ -35,14 +71,6 @@ rmRows=sapply(1:length(selfOver), function(x){
 
 
 tir.gr=tir.gr[-rmRows,]
-tir.gr$mtec=tir$mtec[filters][-rmRows]
-tir.gr$mtecfamnum=substr(tir.gr$mtec, 7,11)
-tir.gr$sup=substr(tir.gr$mtec, 1, 3)
-tir.gr$famname=paste(tir.gr$sup, tir.gr$mtecfamnum, sep='')
-tir.gr$TSD=tir$tsdadjacentup[filters][-rmRows]
-tir.gr$TIR=tir$tirseqSingle[filters][-rmRows]
-
-strand(tir.gr)=tir$strand[filters][-rmRows]
 
 
 ## okay, now get the ones that overlap partially
@@ -146,7 +174,7 @@ tir.gr$ID=paste0(tir.gr$updatedfamname, tir.gr$Name)
 GENOMENAME='B73'
 #GENOMENAME='W22'
 ### end -1 for gff3 format!
-d=data.frame(chr=seqnames(tir.gr), 'TARGeT', 'terminal_inverted_repeat_element', start(tir.gr), end(tir.gr), '.', strand(tir.gr), '.', Name=paste0('ID=', tir.gr$ID, ';Name=', tir.gr$ID, '_', tir.gr$TSD, '_', tir.gr$TIR))
+d=data.frame(chr=seqnames(tir.gr), 'TARGeT', 'terminal_inverted_repeat_element', start(tir.gr), end(tir.gr), '.', strand(tir.gr), '.', Name=paste0('ID=', tir.gr$ID, ';Name=', tir.gr$ID, '_', tir.gr$TSD, '_', tir.gr$TIRup, '_', tir.gr$TIRmm, '_', tir.gr$TIRdown))
 #d=d[tir$tsdadjacentequal & tir$tirsmatch,]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
