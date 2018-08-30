@@ -162,12 +162,12 @@ temp=mclapply(which(sapply(tir$tirseq, length)>1), function(x) {
 		    if(sum(tsdsequal1)==1){uptsds=uptsds1; downtsds=downtsds1; tsdsequal=tsdsequal1
 					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))
 					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
-					  upposns=upposns[tsdsequal1 & sum(tsdsequal1)==1] +1
+					  upposns=upposns +1
 					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -1
 					}else if(sum(tsdsequal2)==1){uptsds=uptsds2; downtsds=downtsds2; tsdsequal=tsdsequal2
 					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten)))
 					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
-					  upposns=upposns[tsdsequal1 & sum(tsdsequal1)==1] +2
+					  upposns=upposns +2
 					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -2
 						}
 		    return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent, tirseqRC))
@@ -201,15 +201,18 @@ tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = unlist(mclapply(1:le
 ### ADDING IN TSD TO FIND THIS, AS SHORTENED TIR CAN BE IN MULTIPLE PLACES!!!!
 ## get position of TIR in forward orientation of upstream extract.
 #tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
-tir$tirstartup=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tsdadjacentup, tir$tirseqSingle[x]), tir$upstreamExtra[x])), mc.cores=ncores))
-		      
+tir$tirstartup=NA
+tir$tirstartup=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tsdadjacentup[x], tir$tirseqSingle[x]), tir$upstreamExtra[x])), mc.cores=ncores))
+tir$tirstartup[tir$tirstartup==-1]=NA
+tir$tirstartup=tir$tirstartup+nchar(tir$tsdadjacentup)   
 		      
 ## get position of TIR in forward orientation of downstream extract.
 # to do RC: as.character(reverseComplement(DNAString(tirF)))
 ## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
-tir$tirstartdown=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tirseqRCSingle[x], tir$tsdadjacentdown), tir$downstreamExtra[x]))-1, mc.cores=ncores))
+tir$tirstartdown=NA
+tir$tirstartdown=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tirseqRCSingle[x], tir$tsdadjacentdown[x]), tir$downstreamExtra[x]))-1, mc.cores=ncores))
 			
 			
 			
@@ -235,6 +238,10 @@ tir$end.adj[tir$origlen <= 2*offset ]=   unlist(mclapply(which(tir$origlen <= 2*
 #as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2)))))
 ##tir$downstreamExtra[tir$origlen <= 2*offset ] = as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$end[tir$origlen <= 2*offset ]- ( tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$end[tir$origlen <= 2*offset ] + (2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)))))
 
+## fix short odds
+is.odd <- function(x) x %% 2 != 0				   
+tir$start.adj[tir$origlen <= 2*offset & is.odd(tir$origlen)]= unlist(mclapply(which(tir$origlen <= 2*offset & is.odd(tir$origlen)), function(x) (tir$start[x] - floor(2*offset - tir$origlen[x]/2) + tir$tirstartup[x] - 2 ), mc.cores=ncores))
+tir$end.adj[tir$origlen <= 2*offset & is.odd(tir$origlen)]=   unlist(mclapply(which(tir$origlen <= 2*offset & is.odd(tir$origlen)), function(x) (tir$end[x] - floor(tir$origlen[x]/2) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 2), mc.cores=ncores))
 
 
 ## add strand (relative to mtec)
@@ -247,14 +254,21 @@ tir$fam=paste0(tir$sup, substr(tir$mtec, 7,11))
 						
 ################
 ## check that i have what i think i have
-################						
-
-tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
-tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
+################	
+									      
+tir$start.adj=as.numeric(tir$start.adj)
+tir$end.adj=as.numeric(tir$end.adj)
+tir$tirupinseq=NA
+tir$tirdowninseqRC=NA
+tir$tirupinseq[!is.na(tir$start.adj)]=	as.character(getSeq(seqs, GRanges(tir$chrnew[!is.na(tir$start.adj)], IRanges(start=tir$start.adj[!is.na(tir$start.adj)], end=tir$start.adj[!is.na(tir$start.adj)]+nchar(tir$tirseqSingle[!is.na(tir$start.adj)])-1))))				
+tir$tirdowninseqRC[!is.na(tir$start.adj)]=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[!is.na(tir$start.adj)], IRanges(start=tir$end.adj[!is.na(tir$start.adj)]-nchar(tir$tirseqSingle[!is.na(tir$start.adj)])+1, end=tir$end.adj[!is.na(tir$start.adj)])))))
 																		      
 tir$tirsmatch=tir$tirseqSingle==tir$tirupinseq & tir$tirseqSingle==tir$tirdowninseq & tir$tirupinseq!=''	
 
+table(tir$tirsmatch)
+table(tir$tirsmatch[tir$tsdadjacentequal])
 
+							 
 ################
 ## output gffs
 ################
