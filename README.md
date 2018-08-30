@@ -22,7 +22,15 @@ CAGGG
 
 ### path right now is: (need to clean up)
 
+1. `tir_search_simple.mismatchTIR.R` - NOTE that this has to be on UNIX (even using R) because I'm having locale issues I haven't been able to resolve on my Mac.
+2. `add_families.R` uses output from #1, but needs to be adapted to read in only gff's not the crazy large text file I output
+
+This generates a gff3 with all TIR copies, not two (identical TIR and mismatch TIR) as I was doing before.
+
+### old path was (before Aug 29)
 1. `tir_search_simple.R`
 2. `add_families.R` not great documentation of how to get source
 3. `tir_search_simple.mismatchTIR.R` - NOTE that this has to be on UNIX (even using R) because I'm having locale issues I haven't been able to resolve on my Mac.
 4. `add_families.mismatch.R` uses output from #2
+
+
