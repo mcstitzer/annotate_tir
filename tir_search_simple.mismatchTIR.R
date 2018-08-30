@@ -606,6 +606,11 @@ tirm$end.adj[which(sapply(tirm$tirseq, length)>1)]= unlist(mclapply(which(sapply
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
 tirm$start.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1 ]= unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 1 ), mc.cores=ncores))
 tirm$end.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1]=   unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+
+## fix short odds
+is.odd <- function(x) x %% 2 != 0   
+tirm$start.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1 & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)& sapply(tirm$tirseq, length)>1 ), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 2 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1 & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)& sapply(tirm$tirseq, length)>1 ), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 2), mc.cores=ncores))
 				      				      
 					  
 ################
