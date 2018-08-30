@@ -161,12 +161,12 @@ temp=mclapply(which(sapply(tir$tirseq, length)>1), function(x) {
 				     
 		    if(sum(tsdsequal1)==1){uptsds=uptsds1; downtsds=downtsds1; tsdsequal=tsdsequal1
 					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))
-					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+					  tirseqRC=sapply(tirseqRC, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
 					  upposns=upposns +1
 					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -1
 					}else if(sum(tsdsequal2)==1){uptsds=uptsds2; downtsds=downtsds2; tsdsequal=tsdsequal2
 					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten)))
-					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
+					  tirseqRC=sapply(tirseqRC, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
 					  upposns=upposns +2
 					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -2
 						}
