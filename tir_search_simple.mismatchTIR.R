@@ -523,20 +523,23 @@ tempm=mclapply(i, function(x) {
 	allcombos$closestTSDseq=NA
 	tircands=data.frame(t(data.frame(sapply(1:nrow(allcombos), function(tirseqcand) checkTIRcandidateforOffsetTSD(tirseqSingle=allcombos$tirseq[tirseqcand], tirm$upstreamExtra[x], tirm$downstreamExtra[x], offset=allcombos$offset[tirseqcand], tsdlen=tirm$tsdlen[x])))))
 	if(sum(!is.na(tircands$closestTSDseq))==1){
-		tempstore=cbind(tircands[!is.na(tircands$closestTSDseq),], tirseq=allcombos$tirseq[!is.na(tircands$closestTSDseq)])
-	}else{tempstore=tircands[1,]
+		tempstore=cbind.data.frame(tircands[!is.na(tircands$closestTSDseq),], tirseq=allcombos$tirseq[!is.na(tircands$closestTSDseq)], stringsAsFactors = FALSE)
+#		tempstore$tirseq=as.character(tempstore$tirseq)
+	}else{tempstore=cbind(tircands[1,], tirseq=NA)
 	      tempstore[1,]=c(NA,NA,NA,NA,NA)
 	     }
+#	return(tempstore)
 	}, mc.cores=ncores
 	)
 ## this is a data frame of closestTSDoffset, closestTSDseq, tirstartup, and tirstartdown.
 ##  there's one entry for each tirm that has more than one potential TIR, but many are NA
-tirmworking=as.data.frame(do.call(rbind, tempm))
-tirmworking$tirseq=as.character(tirmworking$tirseq)
+tirmworking=as.data.frame(do.call(rbind, tempm), stringsAsFactors=F)
+tirmworking=data.frame(lapply(tirmworking, unlist), stringsAsFactors=F)					 
+#tirmworking$tirseq=as.character(tirmworking$tirseq)
+
 					 
-		
-tirm$closestTSDseq[i]=tirmworking[,'closestTSDseq']
-tirm$closestTSDoffset[i]=tirmworking[,'closestTSDoffset']
+tirm$closestTSDseq[i]=tirmworking$closestTSDseq
+tirm$closestTSDoffset[i]=tirmworking$closestTSDoffset
 tirm$tirstartup[i]=tirmworking$tirstartup
 tirm$tirstartdown[i]=tirmworking$tirstartdown
 tirm$tirseqSingle[i]=tirmworking$tirseq
