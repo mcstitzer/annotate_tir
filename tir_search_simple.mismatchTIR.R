@@ -548,9 +548,9 @@ tirm$tirseqSingle[i]=tirmworking$tirseq
 
 					 
 tirm$closestTSDseq=unlist(tirm$closestTSDseq)
-tirm$closestTSDoffset=unlist(tirm$closestTSDoffset)					 
-tirm$tirstartup=unlist(tirm$tirstartup)
-tirm$tirstartdown=unlist(tirm$tirstartdown)
+tirm$closestTSDoffset=as.numeric(unlist(tirm$closestTSDoffset))					 
+tirm$tirstartup=as.numeric(unlist(tirm$tirstartup))
+tirm$tirstartdown=as.numeric(unlist(tirm$tirstartdown))
 tirm$tirseqSingle=unlist(tirm$tirseqSingle)		 
 					 
 					 
@@ -566,11 +566,11 @@ tirm$tirstartup.adj[tirm$tirstartup.adj>2*offset]=NA
 #tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
 ### HERE, I can redo everything! And not do it above. BUT because I sutracted from tirstartup.adj above, don't redo those 1 tir copies here?
 #Check candidate TIRs
-tirm$adjustedTIRup[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
-tirm$adjustedTIRdown[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))
+tirm$adjustedTIRup[sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
+tirm$adjustedTIRdown[sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))
 #tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]+1, tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])), mc.cores=ncores)) ## this minus 1 already subtracted in the regex!!
 
-tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=unlist(mclapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))), mc.cores=ncores))
+tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown)& !is.na(tirm$tirstartup.adj))]=unlist(mclapply(which(!is.na(tirm$adjustedTIRdown)& !is.na(tirm$tirstartup.adj)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))), mc.cores=ncores))
 tirm$seqdist[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'), mc.cores=ncores))
 		
 #### SO NOW, I THINK I HAVE IT ALL!!!!!!!!!!!!!
@@ -681,7 +681,7 @@ tirm[!is.na(tirm$closestTSDoffset) & !tirm$tirsadjustedmatch,]
 						  
 						  
 #dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
-dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
+dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
 ### this concerns me!!!
 #dm[,4:5]=dm[,4:5]-1
 dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2) & tirm$tirsadjustedmatch,]
