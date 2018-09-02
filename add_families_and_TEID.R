@@ -6,7 +6,7 @@ library(stringr)
 library(plyr)
 
 #tir=fread('~/Downloads/tir_B73_2018-07-26_extra.txt')
-tir=fread('all_tir_B73_2018-08-25_extra.txt')
+#tir=fread('all_tir_B73_2018-08-25_extra.txt')
 #tir=tir[,c('mtec', 'chr', 'start.adj', 'end.adj', 'tirseqSingle', 'tsdadjacentup', 'fam', 'sup')]
 #tir=tir[tir$start.adj-tir$end.adj<0,]
 
@@ -24,7 +24,7 @@ tir$TIRup=tircols[,5]
 tir$TIRmm=tircols[,6]
 tir$TIRdown=tircols[,7]
 tir.gr=tir
-mcols(tir.gr)=NULL
+#mcols(tir.gr)=NULL
 
 
 
@@ -43,20 +43,20 @@ tirmm$TIRup=tirmmcols[,5]
 tirmm$TIRmm=tirmmcols[,6]
 tirmm$TIRdown=tirmmcols[,7]
 tirmm.gr=tirmm
-mcols(tirmm.gr)=NULL
+#mcols(tirmm.gr)=NULL
                  
                   
                   
 ## filters
-filters=tir$tirsmatch & tir$tsdadjacentequal & nchar(tir$tirseqSingle)>=5 & tir$end.adj-tir$start.adj>=40
+#filters=tir$tirsmatch & tir$tsdadjacentequal & nchar(tir$tirseqSingle)>=5 & tir$end.adj-tir$start.adj>=40
 
-tir=tir[filters,]
+#tir=tir[filters,]
   
 #names(tir)=c('mtec', 'chr', 'start', 'end', 'tirscore', 'V6', 'V7', 'TIR1', 'TIR2')
-tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))## add 5 bp minimum for TIR length, that is Bergamo's
+#tir.gr=GRanges(seqnames=tir$chr, ranges=IRanges(start=tir$start.adj, end=tir$end.adj))## add 5 bp minimum for TIR length, that is Bergamo's
 #mcols(tir.gr)$score=tir$tirscore
 
-strand(tir.gr)=tir$strand
+#strand(tir.gr)=tir$strand
                   
                   
 origlen=length(tir.gr)
