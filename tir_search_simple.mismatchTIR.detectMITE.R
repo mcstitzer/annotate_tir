@@ -28,11 +28,14 @@ seqs=readDNAStringSet('../../../W22__Ver12.fasta')
 ## split into chunks! split -l 1000000  all_w22_tir_target_matches.txt
 ## makes files! xaa  xab  xac  xad  xae  xaf  xag  xah  
 
-for(splitfile in c('xaa', 'xab', 'xac', 'xad', 'xae', 'xaf', 'xag', 'xah')){
+#for(splitfile in c('xaa', 'xab', 'xac', 'xad', 'xae', 'xaf', 'xag', 'xah')){
 #a=fread('all_b73_tir_target_matches.txt', header=F)
 #a=fread('all_w22_tir_target_matches.txt', header=F)
-a=fread(splitfile, header=F)
-	
+#a=fread(splitfile, header=F)
+
+a=fread("awk '!seen[$5]++' all_w22_tir_target_matches.txt", header=F) ## get only unique start positions - reduces w22 to 3 million or so
+
+#for(splitfile in split(which(sapply(tirm$tirseq, length)>1), ceiling(seq_along(which(sapply(tirm$tirseq, length)>1))/500000))){
 #a=fread('all_w22_mtec_tir_target_matches.txt', header=F) ## this is just MTEC
 a$mtec=gsub('Query:', '', a$V2)
 a$chr=gsub('Sbjct:', '', a$V3)
@@ -56,7 +59,9 @@ tsdlens=data.frame(sup=c('DTA', 'DTC', 'DTH', 'DTM', 'DTT'), tsdlen=c(8, 3, 3, 9
 tir$tsdlen=mapvalues(substr(tir$mtec,1,3), from=tsdlens$sup, to=tsdlens$tsdlen)
 tir$tsdlen=as.numeric(tir$tsdlen)
 
-tir$tsdlen[!tir$mtec %in% a$mtec]=as.numeric(as.character(mapvalues(tir$mtec[!tir$mtec %in% a$mtec], from=as.character(dm$mtec), to=dm$tsdlen)))
+#tir$tsdlen[!tir$mtec %in% a$mtec]=as.numeric(as.character(mapvalues(tir$mtec[!tir$mtec %in% a$mtec], from=as.character(dm$mtec), to=dm$tsdlen)))
+tir$sup=substr(tir$mtec,1,3)
+tir$tsdlen[tir$sup=='DTX']=as.numeric(as.character(mapvalues(tir$mtec[tir$sup=='DTX'], from=as.character(dm$Name),to=dm$TSDlen, warn_missing=F)))
 
 ########## 
 ########## Define a region surrounding each end of the TE to search for TIRs
@@ -68,15 +73,16 @@ tir$tsdlen[!tir$mtec %in% a$mtec]=as.numeric(as.character(mapvalues(tir$mtec[!ti
 tir$origlen=tir$end-tir$start ## note that none of these are negative!
 
 offset=200
-tir$upstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))
-tir$downstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset))))
-tir$downstreamExtraRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset)))))
-tir$upstreamExtraRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset)))))
+#tir$upstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))
+tir$upstreamExtra=unlist(mclapply(1:nrow(tir), function(x) as.character(getSeq(seqs, GRanges(tir$chrnew[x], IRanges(start=tir$start[x]-offset, end=tir$start[x]+offset)))), mc.cores=ncores))
+tir$downstreamExtra=unlist(mclapply(1:nrow(tir), function(x) as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset)))))
+#tir$downstreamExtraRC=sapply(1:nrow(tir), function(x) as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset))))))
+#tir$upstreamExtraRC=sapply(1:nrow(tir), function(x) as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))))
 
-tir$upstreamExtra[tir$origlen <= 2*offset ] = as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2)))))
-tir$downstreamExtra[tir$origlen <= 2*offset ] = as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$end[tir$origlen <= 2*offset ]- ( tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$end[tir$origlen <= 2*offset ] + (2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)))))
-tir$upstreamExtraRC[tir$origlen <= 2*offset ] = as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2))))))
-tir$downstreamExtraRC[tir$origlen <= 2*offset ] = as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$end[tir$origlen <= 2*offset ]- ( tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$end[tir$origlen <= 2*offset ] + (2*offset-tir$origlen[tir$origlen <= 2*offset ]/2))))))
+tir$upstreamExtra[tir$origlen <= 2*offset ] = unlist(mclapply(which(tir$origlen <= 2*offset), function(x) as.character(getSeq(seqs, GRanges(tir$chrnew[x], IRanges(start=tir$start[x]- ( 2*offset-tir$origlen[x]/2), end=tir$start[x] + (tir$origlen[x]/2)))))
+tir$downstreamExtra[tir$origlen <= 2*offset ] = unlist(mclapply(which(tir$origlen <= 2*offset), function(x) as.character(getSeq(seqs, GRanges(tir$chrnew[x], IRanges(start=tir$end[x]- ( tir$origlen[x]/2), end=tir$end[x] + (2*offset-tir$origlen[x]/2)))))
+#tir$upstreamExtraRC[tir$origlen <= 2*offset ] = as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2))))))
+#tir$downstreamExtraRC[tir$origlen <= 2*offset ] = as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$end[tir$origlen <= 2*offset ]- ( tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$end[tir$origlen <= 2*offset ] + (2*offset-tir$origlen[tir$origlen <= 2*offset ]/2))))))
 
 ### the previous all look great, don't think I use the RC's???
 
