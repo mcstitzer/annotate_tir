@@ -9,11 +9,14 @@ library(rtracklayer)    # Provides import() and export()
 library(data.table)
 library(stringdist)
 library(stringr)
+library(parallel)
+
+ncores=64
 
 
 ## read in refgen
-seqs=readDNAStringSet('../agpv4_te_annotation/ncbi_pseudomolecule/B73V4.both_pseudo_AND_unplaced.fa')
-#seqs=readDNAStringSet('../../../W22__Ver12.fasta')
+#seqs=readDNAStringSet('../agpv4_te_annotation/ncbi_pseudomolecule/B73V4.both_pseudo_AND_unplaced.fa')
+seqs=readDNAStringSet('../../../W22__Ver12.fasta')
 
 ## read in all output 
 ## ex line >1_B73V4.both_pseudo_AND_unplaced.fa Query:DTC_ZM00060_consensus Sbjct:10 Length:4429 Location:(93697655 - 93710698) Direction:minus
@@ -25,10 +28,10 @@ seqs=readDNAStringSet('../agpv4_te_annotation/ncbi_pseudomolecule/B73V4.both_pse
 ## split into chunks! split -l 1000000  all_w22_tir_target_matches.txt
 ## makes files! xaa  xab  xac  xad  xae  xaf  xag  xah  
 
-for(i in c('xaa', 'xab', 'xac', 'xad', 'xae', 'xaf', 'xag', 'xah')){
+for(splitfile in c('xaa', 'xab', 'xac', 'xad', 'xae', 'xaf', 'xag', 'xah')){
 #a=fread('all_b73_tir_target_matches.txt', header=F)
 #a=fread('all_w22_tir_target_matches.txt', header=F)
-a=fread(i, header=F)
+a=fread(splitfile, header=F)
 	
 #a=fread('all_w22_mtec_tir_target_matches.txt', header=F) ## this is just MTEC
 a$mtec=gsub('Query:', '', a$V2)
@@ -63,10 +66,8 @@ tir$tsdlen[!tir$mtec %in% a$mtec]=as.numeric(as.character(mapvalues(tir$mtec[!ti
 
 
 tir$origlen=tir$end-tir$start ## note that none of these are negative!
-tir$chrmax=as.numeric(as.character(mapvalues(tir$chr, from=names(seqs), to=width(seqs))))
 
 offset=200
-tir=tir[tir$start>offset+2 & tir$end<tir$chrmax-offset-3 & tir$start<tir$chrmax-offset-3 & tir$end>offset+2,]
 tir$upstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))
 tir$downstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset))))
 tir$downstreamExtraRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset)))))
@@ -93,10 +94,13 @@ tir$tirseqRCSingle=unlist(lapply(tir$tirseqRC, function(l) l[[length(l)]]))  ## 
 tir=tir[!grepl('N', tir$tirseqSingle),]
 
 ## get position of TIR in forward orientation of upstream extract.
-tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
+#tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
+tir$tirstartup=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])), mc.cores=ncores))
 
+				 
 ## get position of TIR in forward orientation of downstream extract.
-tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x])))
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x])))
+tir$tirstartdown=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x])), mc.cores=ncores))
 				 
 ## having an issue with weird characters, removing those that don't have a tir present here.
 ## removes about 150 copies where no match is found. ## now 871 for full b73
@@ -105,18 +109,18 @@ tir=tir[tir$tirstartup != -1,]
 				 
 				 
 				 
-tir$tsdadjacentup=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1))
-tir$tsdadjacentdown=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ))
+tir$tsdadjacentup=unlist(mclapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] - tir$tsdlen[x], tir$tirstartup[x]-1), mc.cores=ncores))
+tir$tsdadjacentdown=unlist(mclapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]), tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 ), mc.cores=ncores))
 tir$tsdadjacentequal=tir$tsdadjacentup == tir$tsdadjacentdown
 
 ## shorten TIR by 1 bp in case the TSD is pallindromic and getting incorporated!
 ### start with 1 bp to see how much it changes - in theory, could reduce more.
-tir$tsdadjacentup1=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 1 - tir$tsdlen[x], tir$tirstartup[x]-1 +1 ))
-tir$tsdadjacentdown1=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -1 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -1))
+tir$tsdadjacentup1=unlist(mclapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 1 - tir$tsdlen[x], tir$tirstartup[x]-1 +1 ), mc.cores=ncores))
+tir$tsdadjacentdown1=unlist(mclapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -1 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -1), mc.cores=ncores))
 tir$tsdadjacentequal1=tir$tsdadjacentup1 == tir$tsdadjacentdown1
 			   
-tir$tsdadjacentup2=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 2 - tir$tsdlen[x], tir$tirstartup[x]-1 +2 ))
-tir$tsdadjacentdown2=sapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -2 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -2))
+tir$tsdadjacentup2=unlist(mclapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 2 - tir$tsdlen[x], tir$tirstartup[x]-1 +2 ), mc.cores=ncores))
+tir$tsdadjacentdown2=unlist(mclapply(1:nrow(tir), function(x) substr(tir$downstreamExtra[x], tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) -2 , tir$tirstartdown[x]  + nchar(tir$tirseqSingle[x]) + tir$tsdlen[x] -1 -2), mc.cores=ncores))
 tir$tsdadjacentequal2=tir$tsdadjacentup2 == tir$tsdadjacentdown2
 
 #tir$tsdadjacentup3=sapply(1:nrow(tir), function(x) substr(tir$upstreamExtra[x], tir$tirstartup[x] + 3 - tir$tsdlen[x], tir$tirstartup[x]-1 +3 ))
@@ -129,14 +133,14 @@ tir$tsdadjacentequal2=tir$tsdadjacentup2 == tir$tsdadjacentdown2
 tir$tsdadjacentup[tir$tsdadjacentequal1]=tir$tsdadjacentup1[tir$tsdadjacentequal1]			    			    
 tir$tsdadjacentdown[tir$tsdadjacentequal1]=tir$tsdadjacentdown1[tir$tsdadjacentequal1]			    			    
 tir$tsdadjacentequal[tir$tsdadjacentequal1]=T
-tir$tirseqSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))    
-tir$tirseqRCSingle[tir$tsdadjacentequal1]=sapply(tir$tirseqRCSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+tir$tirseqSingle[tir$tsdadjacentequal1]=unlist(mclapply(tir$tirseqSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)), mc.cores=ncores))    
+tir$tirseqRCSingle[tir$tsdadjacentequal1]=unlist(mclapply(tir$tirseqRCSingle[tir$tsdadjacentequal1], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1), mc.cores=ncores))
 ## and 2 offset				       
 tir$tsdadjacentup[tir$tsdadjacentequal2]=tir$tsdadjacentup2[tir$tsdadjacentequal2]			    			    
 tir$tsdadjacentdown[tir$tsdadjacentequal2]=tir$tsdadjacentdown2[tir$tsdadjacentequal2]			    			    
 tir$tsdadjacentequal[tir$tsdadjacentequal2]=T
-tir$tirseqSingle[tir$tsdadjacentequal2]=sapply(tir$tirseqSingle[tir$tsdadjacentequal2], function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten)))    
-tir$tirseqRCSingle[tir$tsdadjacentequal2]=sapply(tir$tirseqRCSingle[tir$tsdadjacentequal2], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
+tir$tirseqSingle[tir$tsdadjacentequal2]=unlist(mclapply(tir$tirseqSingle[tir$tsdadjacentequal2], function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten)), mc.cores=ncores))    
+tir$tirseqRCSingle[tir$tsdadjacentequal2]=unlist(mclapply(tir$tirseqRCSingle[tir$tsdadjacentequal2], function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2), mc.cores=ncores))
 
 
 
@@ -146,7 +150,7 @@ tir$tirseqRCSingle[tir$tsdadjacentequal2]=sapply(tir$tirseqRCSingle[tir$tsdadjac
 ### actually deal with pesky multiple TIRs by searching each for a TSD here.
 
 
-temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
+temp=mclapply(which(sapply(tir$tirseq, length)>1), function(x) {
 #		     print(x)
 		    tirseq=as.character(tir$tirseq[[x]])
 		    tirseqRC=sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
@@ -169,17 +173,17 @@ temp=lapply(which(sapply(tir$tirseq, length)>1), function(x) {
 				     
 		    if(sum(tsdsequal1)==1){uptsds=uptsds1; downtsds=downtsds1; tsdsequal=tsdsequal1
 					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 2, nchar(tirtoshorten)))
-					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
-					  upposns=upposns[tsdsequal1 & sum(tsdsequal1)==1] +1
+					  tirseqRC=sapply(tirseqRC, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-1))
+					  upposns=upposns +1
 					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -1
 					}else if(sum(tsdsequal2)==1){uptsds=uptsds2; downtsds=downtsds2; tsdsequal=tsdsequal2
 					  tirseq=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 3, nchar(tirtoshorten)))
-					  tirseqRC=sapply(tirseq, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
-					  upposns=upposns[tsdsequal1 & sum(tsdsequal1)==1] +2
+					  tirseqRC=sapply(tirseqRC, function(tirtoshorten) substr(tirtoshorten, 1, nchar(tirtoshorten)-2))
+					  upposns=upposns +2
 					  downposns=as.numeric(sapply(tirseqRC, function(tirR) regexpr(tirR,tir$downstreamExtra[x]))) + sapply(tirseq, function(te) nchar(te)) -2
 						}
 		    return(list(tirseq, upposns, downposns, uptsds, downtsds, tsdsequal, tsdtirjunctionpresent, tirseqRC))
-                    })
+                    }, mc.cores=ncores)
 
 ## okay, so not inconsequential number of copies with multiple possible adjacent TIRs
 table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]]))) ## this is always at least 2, because there are at least 2 TIR candidates here!
@@ -190,12 +194,12 @@ table(sapply(1:length(temp), function(x) sum(temp[[x]][[7]] & temp[[x]][[6]])))
 
 ######## PICK ONE from temp to add to tir's columns!
 ## replace multis with the best TIR, abandoning those with >1 best TIR/TSD pair
-tir$tirseqSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[1]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[8]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
+tir$tirseqSingle[which(sapply(tir$tirseq, length)>1)] = unlist(mclapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[1]][temp[[x]][[7]] & temp[[x]][[6]]], ''), mc.cores=ncores))
+tir$tirseqRCSingle[which(sapply(tir$tirseq, length)>1)] = unlist(mclapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[8]][temp[[x]][[7]] & temp[[x]][[6]]], ''), mc.cores=ncores))
 #tir$tsdseq[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tsdadjacentup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''))
-tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
+tir$tsdadjacentup[which(sapply(tir$tirseq, length)>1)] = unlist(mclapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''), mc.cores=ncores))
+tir$tsdadjacentdown[which(sapply(tir$tirseq, length)>1)] = unlist(mclapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[5]][temp[[x]][[7]] & temp[[x]][[6]]], ''), mc.cores=ncores))
+tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = unlist(mclapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F), mc.cores=ncores))
 #tir$tsdtirjunctionpresent[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, T, F))
 #tir$tsdstartup[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[3]][temp[[x]][[7]] & temp[[x]][[6]]], -1))
 #tir$tsdstartdown[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp), function(x) ifelse(sum(temp[[x]][[7]] & temp[[x]][[6]])==1, temp[[x]][[4]][temp[[x]][[7]] & temp[[x]][[6]]]-nchar(temp[[x]][[1]][1]), -1))
@@ -209,17 +213,20 @@ tir$tsdadjacentequal[which(sapply(tir$tirseq, length)>1)] = sapply(1:length(temp
 ### ADDING IN TSD TO FIND THIS, AS SHORTENED TIR CAN BE IN MULTIPLE PLACES!!!!
 ## get position of TIR in forward orientation of upstream extract.
 #tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
-tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tsdadjacentup, tir$tirseqSingle[x]), tir$upstreamExtra[x])))
-		      
+tir$tirstartup=NA
+tir$tirstartup=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tsdadjacentup[x], tir$tirseqSingle[x]), tir$upstreamExtra[x])), mc.cores=ncores))
+tir$tirstartup[tir$tirstartup==-1]=NA
+tir$tirstartup=tir$tirstartup+nchar(tir$tsdadjacentup)   
 		      
 ## get position of TIR in forward orientation of downstream extract.
 # to do RC: as.character(reverseComplement(DNAString(tirF)))
 ## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
 #tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
-tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tirseqRCSingle[x], tir$tsdadjacentdown), tir$downstreamExtra[x]))-1)
-			
-			
+tir$tirstartdown=NA
+tir$tirstartdown=unlist(mclapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$tirseqRCSingle[x], tir$tsdadjacentdown[x]), tir$downstreamExtra[x]))-1, mc.cores=ncores))
+tir$tirstartup[tir$tirstartdown==-2]=NA		## use as filter below	
+tir$tirstartdown[tir$tirstartdown==-2]=NA			
 			
 
 ## having an issue with weird characters, removing those that don't have a tir present here.
@@ -233,16 +240,20 @@ tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(paste0(tir$t
 ## Now, adjust positions to put them back on the same scale as the genome!!!
 ############
 ##adjust positions
-tir$start.adj=sapply(1:nrow(tir), function(x) (tir$start[x]-offset) + tir$tirstartup[x] - 1 )## parentheses puts on same scale as upstreamExtra
-tir$end.adj= sapply(1:nrow(tir), function(x) (tir$end[x]-offset) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 1)
+tir$start.adj=unlist(mclapply(1:nrow(tir), function(x) (tir$start[x]-offset) + tir$tirstartup[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
+tir$end.adj= unlist(mclapply(1:nrow(tir), function(x) (tir$end[x]-offset) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 1, mc.cores=ncores))
 
 ## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
-tir$start.adj[tir$origlen <= 2*offset ]= sapply(which(tir$origlen <= 2*offset), function(x) (tir$start[x] - floor(2*offset - tir$origlen[x]/2) + tir$tirstartup[x] - 1 ))
-tir$end.adj[tir$origlen <= 2*offset ]=   sapply(which(tir$origlen <= 2*offset), function(x) (tir$end[x] - floor(tir$origlen[x]/2) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 1))
+tir$start.adj[tir$origlen <= 2*offset ]= unlist(mclapply(which(tir$origlen <= 2*offset), function(x) (tir$start[x] - floor(2*offset - tir$origlen[x]/2) + tir$tirstartup[x] - 1 ), mc.cores=ncores))
+tir$end.adj[tir$origlen <= 2*offset ]=   unlist(mclapply(which(tir$origlen <= 2*offset), function(x) (tir$end[x] - floor(tir$origlen[x]/2) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 1), mc.cores=ncores))
 #as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$start[tir$origlen <= 2*offset ] + (tir$origlen[tir$origlen <= 2*offset ]/2)))))
 ##tir$downstreamExtra[tir$origlen <= 2*offset ] = as.character(getSeq(seqs, GRanges(tir$chrnew[tir$origlen <= 2*offset ], IRanges(start=tir$end[tir$origlen <= 2*offset ]- ( tir$origlen[tir$origlen <= 2*offset ]/2), end=tir$end[tir$origlen <= 2*offset ] + (2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)))))
 
+## fix short odds
+is.odd <- function(x) x %% 2 != 0				   
+tir$start.adj[tir$origlen <= 2*offset & is.odd(tir$origlen)]= unlist(mclapply(which(tir$origlen <= 2*offset & is.odd(tir$origlen)), function(x) (tir$start[x] - floor(2*offset - tir$origlen[x]/2) + tir$tirstartup[x] - 2 ), mc.cores=ncores))
+tir$end.adj[tir$origlen <= 2*offset & is.odd(tir$origlen)]=   unlist(mclapply(which(tir$origlen <= 2*offset & is.odd(tir$origlen)), function(x) (tir$end[x] - floor(tir$origlen[x]/2) + tir$tirstartdown[x] + nchar(tir$tirseqSingle[x]) - 2), mc.cores=ncores))
 
 
 ## add strand (relative to mtec)
@@ -255,45 +266,52 @@ tir$fam=paste0(tir$sup, substr(tir$mtec, 7,11))
 						
 ################
 ## check that i have what i think i have
-################						
-
-tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
-tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
+################	
+									      
+tir$start.adj=as.numeric(tir$start.adj)
+tir$end.adj=as.numeric(tir$end.adj)
+tir$tirupinseq=NA
+tir$tirdowninseqRC=NA
+tir$tirupinseq[!is.na(tir$start.adj)]=	as.character(getSeq(seqs, GRanges(tir$chrnew[!is.na(tir$start.adj)], IRanges(start=tir$start.adj[!is.na(tir$start.adj)], end=tir$start.adj[!is.na(tir$start.adj)]+nchar(tir$tirseqSingle[!is.na(tir$start.adj)])-1))))				
+tir$tirdowninseqRC[!is.na(tir$start.adj)]=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew[!is.na(tir$start.adj)], IRanges(start=tir$end.adj[!is.na(tir$start.adj)]-nchar(tir$tirseqSingle[!is.na(tir$start.adj)])+1, end=tir$end.adj[!is.na(tir$start.adj)])))))
 																		      
 tir$tirsmatch=tir$tirseqSingle==tir$tirupinseq & tir$tirseqSingle==tir$tirdowninseq & tir$tirupinseq!=''	
 
+table(tir$tirsmatch)
+table(tir$tirsmatch[tir$tsdadjacentequal])
 
+							 
 ################
 ## output gffs
 ################
 ## only keep those where TSDs are equal, adjacent to TIR!!!
 #tir=tir[tir$tsdadjacentequal,]
 
-#GENOMENAME='B73'
-GENOMENAME='W22'
+GENOMENAME='B73'
+#GENOMENAME='W22'
 ### end -1 for gff3 format!
-d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj-1, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle))
+d=data.frame(tir$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tir$start.adj, tir$end.adj-1, '.', tir$strand, '.', paste0('ID=', tir$mtec, '_', tir$tsdadjacentup, '_', tir$tirseqSingle, '_mismatch=0_',tir$tirseqRCSingle))
 d=d[tir$tsdadjacentequal & tir$tirsmatch,]
+d=d[complete.cases(d),]
+
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(d, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(d, file=paste0(GENOMENAME, '_detectMITE_', Sys.Date(),'.', splitfile, '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 ## for maizegdb with Chr
 dd=d						
 levels(dd$tir.chrnew)[1:10]=paste0('Chr', levels(dd$tir.chrnew)[1:10])	
-write.table(dd, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+write.table(dd, file=paste0(GENOMENAME, '_detectMITE_', Sys.Date(),'.', splitfile, '.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 						
- write.table(tir[,-c( 'tirseqRC', 'tirseq')], paste0('all_tir_', GENOMENAME, '_', Sys.Date(), '_extra.txt'), quote=F, sep='\t', col.names=T, row.names=F)
+ #write.table(tir[,-c( 'tirseqRC', 'tirseq')], paste0('all_detectMITE_', GENOMENAME, '_', Sys.Date(), '_extra.txt'), quote=F, sep='\t', col.names=T, row.names=F)
 
 
-### 
-						
 #############################################################################################################################						
 #############################################################################################################################					
 #### TIR mismatches  ########################################################################################################
 #############################################################################################################################
 #############################################################################################################################
-tirm=tir[!tir$tsdadjacentequal & !tir$tirsmatch,]
+tirm=tir[!tir$tsdadjacentequal ,] ## now testing tirsmatch doesn't work because I've defined them through a regex so they better be there!
 
 ## deal with pesky multiple TIRs by removing them here. 
 tirm$tirseqSingle=unlist(lapply(tirm$tirseq, function(l) l[[1]]))
@@ -301,10 +319,10 @@ tirm$tirseqRCSingle=unlist(lapply(tirm$tirseqRC, function(l) l[[length(l)]]))  #
 tirm=tirm[!grepl('N', tirm$tirseqSingle),]
 
 ## get position of TIR in forward orientation of upstream extract.
-tirm$tirstartup=sapply(1:nrow(tirm), function(x) as.numeric(regexpr(tirm$tirseqSingle[x], tirm$upstreamExtra[x])))
+tirm$tirstartup=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(tirm$tirseqSingle[x], tirm$upstreamExtra[x])), mc.cores=ncores))
 
 ## get position of TIR in forward orientation of downstream extract.
-tirm$tirstartdown=sapply(1:nrow(tirm), function(x) as.numeric(regexpr(tirm$tirseqRCSingle[x], tirm$downstreamExtra[x])))
+tirm$tirstartdown=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(tirm$tirseqRCSingle[x], tirm$downstreamExtra[x])), mc.cores=ncores)) ## NO DON'T!  -1 ## be consistent!
 				 
 ## having an issue with weird characters, removing those that don't have a tir present here.
 ## removes about 150 copies where no match is found. ## now 871 for full b73
@@ -319,8 +337,8 @@ tirm=tirm[tirm$tirstartup != -1,]
 tirm$closestTSDseq=NA    ## this is the sequence of the matching TSD
 tirm$closestTSDoffset=NA ## this is the offset from the perfect TIR edge
 for(tirposoffset in 0:20){
-	tsdadjacentup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tirm$tirstartup[x]-1 -tirposoffset ))
-	tsdadjacentdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x]) + tirm$tsdlen[x] -1 +tirposoffset ))
+	tsdadjacentup=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup[x] - tirm$tsdlen[x]-tirposoffset , tirm$tirstartup[x]-1 -tirposoffset ), mc.cores=ncores))
+	tsdadjacentdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x])+tirposoffset , tirm$tirstartdown[x]  + nchar(tirm$tirseqSingle[x]) + tirm$tsdlen[x] -1 +tirposoffset ), mc.cores=ncores))
 	tsdadjacentequal=tsdadjacentup == tsdadjacentdown & tirm$tsdadjacentequal !=''
 	print(sum(tsdadjacentequal))
 	tirm$closestTSDseq[tsdadjacentequal & is.na(tirm$closestTSDseq)]=tsdadjacentup[tsdadjacentequal & is.na(tirm$closestTSDseq)]
@@ -331,73 +349,137 @@ for(tirposoffset in 0:20){
 ### then, check the TIRs they suggest, and see how many mismatches			       
 
 			       
-tirm$tirstartup.adj=tirm$tirstartup
-tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartup-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
+tirm$tirstartup.adj=NA
+tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset)]=unlist(tirm$tirstartup[!is.na(tirm$closestTSDoffset)])-unlist(tirm$closestTSDoffset[!is.na(tirm$closestTSDoffset)])
 #### Don't do this - dumb! the TIR length changes in the positive direction, so adjusting downstream doesn't matter.
 #tirm$tirstartdown.adj=tirm$tirstartdown
 #tirm$tirstartdown.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartdown-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
-			       
+### if less than 1, remove
+tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
+tirm$tirstartup.adj[tirm$tirstartup.adj>2*offset]=NA
+
 			       
 #Check candidate TIRs
-tirm$adjustedTIRup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
-						  
-tirm$adjustedTIRdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
+tirm$adjustedTIRup=NA
+tirm$adjustedTIRup[!is.na(tirm$tirstartup.adj)]=unlist(mclapply(which(!is.na(tirm$tirstartup.adj)), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
+tirm$adjustedTIRdown=NA						  
+tirm$adjustedTIRdown[!is.na(tirm$tirstartup.adj)]=unlist(mclapply(which(!is.na(tirm$tirstartup.adj)), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1), mc.cores=ncores))
+#tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]+1, tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])), mc.cores=ncores)) ## this minus one is already subracted in the regex! see diffs between tir adjustedtirdown before and after regex - i subtract AFTER getting TIR sequence.
 
 tirm$adjustedTIRdownRC=NA
-tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))))
+tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=unlist(mclapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))), mc.cores=ncores))
 
-tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
+tirm$seqdist=unlist(mclapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'), mc.cores=ncores))
 
 		    
 ## either filter by those with TIRs <0.2 distant from each other		    
 tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)-nchar(tirm$tirseqSingle))*0.2,]
 ## or those with new extension of TIR <0.2 distant from each other
 tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup))*0.2,]
-		    
-		    
+
+###############################################
+#### REDEFINE JUST AS FOR PERFECT TIR #########
+###############################################
+tirm$closestTSDseq[tirm$closestTSDseq=='']=NA	## don't want an empty TSD seq to match!!!		     
+			     
+tirm$tirstartup.regex=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(paste0(tirm$closestTSDseq[x], tirm$adjustedTIRup[x]), tirm$upstreamExtra[x])), mc.cores=ncores))
+tirm$tirstartup.regex[tirm$tirstartup.regex==-1]=NA ## need to test to make sure it's found!
+tirm$tirstartup.regex=tirm$tirstartup.regex+nchar(tirm$closestTSDseq)
+		      
+## get position of TIR in forward orientation of downstream extract.
+# to do RC: as.character(reverseComplement(DNAString(tirF)))
+## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
+tirm$tirstartdown.regex=unlist(mclapply(1:nrow(tirm), function(x) as.numeric(regexpr(paste0(tirm$adjustedTIRdown[x], tirm$closestTSDseq[x]), tirm$downstreamExtra[x]))-1, mc.cores=ncores))
+tirm$tirstartup.regex[tirm$tirstartdown.regex==-2]=NA ## i use startup.regex as a filter below
+tirm$tirstartdown.regex[tirm$tirstartdown.regex==-2]=NA
+					
+tirm$tirstartup.regex[tirm$tirstartdown.regex==0]=NA ## i use startup.regex as a filter below
+tirm$tirstartdown.regex[tirm$tirstartdown.regex==0]=NA ## you can't subset in R with a 0!     
+			     
 ############
 ## Now, adjust positions to put them back on the same scale as the genome!!!
 ############
-##adjust positions
-tirm$start.adj=sapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 )## parentheses puts on same scale as upstreamExtra
-######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj= sapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1)-1 ## worried there is another -1 here - is this because I'm defining differently??
+## also have to redo as above!				      
+tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.regex[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
+tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
 
 ## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
-tirm$start.adj[tirm$origlen <= 2*offset ]= sapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ))
+tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 1 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+
+## fix short odds
+is.odd <- function(x) x %% 2 != 0				   
+tirm$start.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 2 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 2), mc.cores=ncores))
+							   
+							   
+##adjust positions
+#tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj[tirm$origlen <= 2*offset ]=   sapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1))-1
+#tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown.adj[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
+###### no longer needed with new search above
+##is.odd <- function(x) x %% 2 != 0
+### floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
+##  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
+########### EVENS WORK FINE AS IS!!!!
+#tirm$start.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset& !is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
+########## ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
+#tirm$end.adj[tirm$origlen <= 2*offset & !is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset& !is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+########## ODDS NEED A MODIFICATION
+#tirm$start.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 2 ), mc.cores=ncores))
+########## ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
+#tirm$end.adj[tirm$origlen <= 2*offset & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 3), mc.cores=ncores))
 
 						  
 ################
 ## check that i have what i think i have
 ################						
-
-tirm$tiradjustedupinseq=as.character(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$start.adj, end=tirm$start.adj+nchar(tirm$adjustedTIRup)-1))))				
-tirm$tiradjusteddowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$end.adj-nchar(tirm$adjustedTIRup)+1, end=tirm$end.adj)))))
+#tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
+#tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
+tirm$tiradjustedupinseq=NA
+tirm$tiradjusteddowninseqRC=NA
+tirm$tiradjustedupinseq[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1], 
+		IRanges(start=tirm$start.adj[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1], 
+			end=tirm$start.adj[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1]+nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1])-1))))				
+tirm$tiradjusteddowninseqRC[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1], 
+		IRanges(start=tirm$end.adj[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1]-nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1])+1, 
+			end=tirm$end.adj[!is.na(tirm$closestTSDseq) & !is.na(tirm$tirstartup.regex)& tirm$tirstartup.regex!=-1])))))
 																		      
 tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
-
+### to make same coordinates as above:
+#tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
+#tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
+										 
+										 
+table(tirm$tirsadjustedmatch)		
+tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup))*0.2,]
+## there are some na values in tirm$tirsadjustedmatch that I don't understand, but I can't find a valid TSD/TIR boudary in them by eye, so I think I will drop them.
 						  
-						  
-dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
-### this concerns me!!!
-dm[,4:5]=dm[,4:5]-1
-dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2),]
-#write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-#write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
-
-## for maizegdb with Chr
-ddm=dm				
-levels(ddm$tirm.chrnew)[1:10]=paste0('Chr', levels(ddm$tirm.chrnew)[1:10])	
-write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatch.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
+#dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
+### now removing the -1 from the end coordinate for gff3 format
+#dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
+#
+#### this concerns me!!!
+##dm[,4:5]=dm[,4:5]-1
+##dm=dm[!is.na(dm[,1]),]
+#dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2) & tirm$tirsadjustedmatch,]
+#dm=dm[complete.cases(dm),]
+##write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+##write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+#write.table(dm, file=paste0(GENOMENAME, '_detectMITE_', Sys.Date(), '.mismatch.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
+#
+### for maizegdb with Chr
+#ddm=dm				
+#levels(ddm$tirm.chrnew)[1:10]=paste0('Chr', levels(ddm$tirm.chrnew)[1:10])	
+#write.table(ddm, file=paste0(GENOMENAME, '_detectMITE_', Sys.Date(), '.mismatch.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 ### need to redo with the multiple possible TIRs			       
 
 						  
-						  
+
 						  
 #######################################################################################
 ### actually deal with pesky multiple TIRs by searching each for a TSD here.     ######
@@ -443,47 +525,63 @@ tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]=NA ## this is the of
 						  
 ## this works, but is running out of memory?? So loop through and do in chunks.
 for(i in split(which(sapply(tirm$tirseq, length)>1), ceiling(seq_along(which(sapply(tirm$tirseq, length)>1))/1000))){
-tempm=lapply(i, function(x) {
+print(paste0('on line ', i[1], ' of tirm, which has ', nrow(tirm), ' lines'))
+tempm=mclapply(i, function(x) {
 	allcombos=expand.grid(as.character(tirm$tirseq[[x]]), 0:20)
 	colnames(allcombos)=c('tirseq', 'offset')
 	allcombos$tirseq=as.character(allcombos$tirseq)
 	allcombos$closestTSDseq=NA
 	tircands=data.frame(t(data.frame(sapply(1:nrow(allcombos), function(tirseqcand) checkTIRcandidateforOffsetTSD(tirseqSingle=allcombos$tirseq[tirseqcand], tirm$upstreamExtra[x], tirm$downstreamExtra[x], offset=allcombos$offset[tirseqcand], tsdlen=tirm$tsdlen[x])))))
 	if(sum(!is.na(tircands$closestTSDseq))==1){
-		tempstore=tircands[!is.na(tircands$closestTSDseq),]
-	}else{tempstore=tircands[1,]
-	      tempstore[1,]=c(NA,NA,NA,NA)
+		tempstore=cbind.data.frame(tircands[!is.na(tircands$closestTSDseq),], tirseq=allcombos$tirseq[!is.na(tircands$closestTSDseq)], stringsAsFactors = FALSE)
+#		tempstore$tirseq=as.character(tempstore$tirseq)
+	}else{tempstore=cbind(tircands[1,], tirseq=NA)
+	      tempstore[1,]=c(NA,NA,NA,NA,NA)
 	     }
-	}
+#	return(tempstore)
+	}, mc.cores=ncores
 	)
 ## this is a data frame of closestTSDoffset, closestTSDseq, tirstartup, and tirstartdown.
 ##  there's one entry for each tirm that has more than one potential TIR, but many are NA
-tirmworking=as.data.frame(do.call(rbind, tempm))
+tirmworking=as.data.frame(do.call(rbind, tempm), stringsAsFactors=F)
+tirmworking=data.frame(lapply(tirmworking, unlist), stringsAsFactors=F)					 
+#tirmworking$tirseq=as.character(tirmworking$tirseq)
+
 					 
-					 
-		
-tirm$closestTSDseq[i]=tirmworking[,'closestTSDseq']
-tirm$closestTSDoffset[i]=tirmworking[,'closestTSDoffset']
+tirm$closestTSDseq[i]=tirmworking$closestTSDseq
+tirm$closestTSDoffset[i]=tirmworking$closestTSDoffset
 tirm$tirstartup[i]=tirmworking$tirstartup
 tirm$tirstartdown[i]=tirmworking$tirstartdown
+tirm$tirseqSingle[i]=tirmworking$tirseq
 					 
 }					 
 
 					 
 tirm$closestTSDseq=unlist(tirm$closestTSDseq)
-tirm$closestTSDoffset=unlist(tirm$closestTSDoffset)					 
-tirm$tirstartup=unlist(tirm$tirstartup)
-tirm$tirstartdown=unlist(tirm$tirstartdown)					 
+tirm$closestTSDoffset=as.numeric(unlist(tirm$closestTSDoffset))					 
+tirm$tirstartup=as.numeric(unlist(tirm$tirstartup))
+tirm$tirstartdown=as.numeric(unlist(tirm$tirstartdown))
+tirm$tirseqSingle=unlist(tirm$tirseqSingle)		 
 					 
+					 
+					 
+tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]
+## the actual adjustment was already done in the loop!!!!
+#tirm$tirstartup.adj[!is.na(tirm$closestTSDoffset)]=(tirm$tirstartup-tirm$closestTSDoffset)[!is.na(tirm$closestTSDoffset)]
+tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
+tirm$tirstartup.adj[tirm$tirstartup.adj>2*offset]=NA
+
 ## essentially redoing this now that we have better candidates
-tirm$tirstartup.adj[which(sapply(tirm$tirseq, length)>1)]=(tirm$tirstartup[which(sapply(tirm$tirseq, length)>1)]-as.numeric(tirm$closestTSDoffset[which(sapply(tirm$tirseq, length)>1)]))
-### HERE, I can redo everything! And not do it above.
+#tirm$tirstartup.adj=(tirm$tirstartup-as.numeric(tirm$closestTSDoffset))
+#tirm$tirstartup.adj[tirm$tirstartup.adj<1]=NA
+### HERE, I can redo everything! And not do it above. BUT because I sutracted from tirstartup.adj above, don't redo those 1 tir copies here?
 #Check candidate TIRs
-tirm$adjustedTIRup=sapply(1:nrow(tirm), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x])-1))  ## need the minus one to exclude the first base of the TIR
-tirm$adjustedTIRdown=sapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])-1))
-tirm$adjustedTIRdownRC=NA
-tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown))]=sapply(which(!is.na(tirm$adjustedTIRdown)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))))
-tirm$seqdist=sapply(1:nrow(tirm), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'))
+tirm$adjustedTIRup[sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)), function(x) substr(tirm$upstreamExtra[x], tirm$tirstartup.adj[x], tirm$tirstartup[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))  ## need the minus one to exclude the first base of the TIR
+tirm$adjustedTIRdown[sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.adj)), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x], tirm$tirstartdown[x]+nchar(tirm$tirseqSingle[x]) + tirm$closestTSDoffset[x] -1), mc.cores=ncores))
+#tirm$adjustedTIRdown=unlist(mclapply(1:nrow(tirm), function(x) substr(tirm$downstreamExtra[x], tirm$tirstartdown[x]+1, tirm$tirstartdown[x]+nchar(tirm$adjustedTIRup[x])), mc.cores=ncores)) ## this minus 1 already subtracted in the regex!!
+
+tirm$adjustedTIRdownRC[which(!is.na(tirm$adjustedTIRdown)& !is.na(tirm$tirstartup.adj))]=unlist(mclapply(which(!is.na(tirm$adjustedTIRdown)& !is.na(tirm$tirstartup.adj)), function(x) as.character(reverseComplement(DNAString(tirm$adjustedTIRdown[x]))), mc.cores=ncores))
+tirm$seqdist[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) stringdist(tirm$adjustedTIRup[x], tirm$adjustedTIRdownRC[x], method='h'), mc.cores=ncores))
 		
 #### SO NOW, I THINK I HAVE IT ALL!!!!!!!!!!!!!
 		    
@@ -500,39 +598,103 @@ head(tirm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup
 ## Now, adjust positions to put them back on the same scale as the genome!!!
 ############
 ##adjust positions
-tirm$start.adj=sapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 )## parentheses puts on same scale as upstreamExtra
+#tirm$start.adj=unlist(mclapply(1:nrow(tirm), function(x) (tirm$start[x]-offset) + tirm$tirstartup.adj[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj= sapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1)-1 ## worried there is another -1 here - is this because I'm defining differently??
+#tirm$end.adj= unlist(mclapply(1:nrow(tirm), function(x) (tirm$end[x]-offset) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))-1 ## worried there is another -1 here - is this because I'm defining differently??
 
 ## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
 #  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
-tirm$start.adj[tirm$origlen <= 2*offset ]= sapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ))
+#tirm$start.adj[tirm$origlen <= 2*offset ]= unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.adj[x] - 1 ), mc.cores=ncores))
 ######### ADDED A MINUS ONE HERE - A BIT WORRIED WHY THIS MATTERS FOR THIS ADJ BUT NOT THE FIRST (maybe because I used the adjusted one?)
-tirm$end.adj[tirm$origlen <= 2*offset ]=   sapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1))-1
+#tirm$end.adj[tirm$origlen <= 2*offset ]=   unlist(mclapply(which(tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))-1
 
+###############################################
+#### REDEFINE JUST AS FOR PERFECT TIR #########
+###############################################
+tirm$closestTSDseq[tirm$closestTSDseq=='']=NA	## don't want an empty TSD seq to match!!!		     
+			     		     
+tirm$tirstartup.regex[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) as.numeric(regexpr(paste0(tirm$closestTSDseq[x], tirm$adjustedTIRup[x]), tirm$upstreamExtra[x])), mc.cores=ncores))
+tirm$tirstartup.regex[tirm$tirstartup.regex==-1 & sapply(tirm$tirseq, length)>1]=NA ## need to test to make sure it's found!
+tirm$tirstartup.regex[which(sapply(tirm$tirseq, length)>1)]=tirm$tirstartup.regex[which(sapply(tirm$tirseq, length)>1)]+nchar(tirm$closestTSDseq[which(sapply(tirm$tirseq, length)>1)])
+		      
+		      
+## get position of TIR in forward orientation of downstream extract.
+# to do RC: as.character(reverseComplement(DNAString(tirF)))
+## and weird char introduced?: sapply(tirseq, function(tirF) tryCatch({as.character(reverseComplement(DNAString(tirF)))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}))
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqRCSingle[x], tir$downstreamExtra[x]))-1)
+#tir$tirstartdown=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tryCatch({as.character(reverseComplement(DNAString(tir$tirseqRCSingle[x])))}, error=function(e){print(paste('line not working', x, 'error is', e)); return('NNNNN')}), tir$downstreamExtra[x]))-1)
+tirm$tirstartdown.regex[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) as.numeric(regexpr(paste0(tirm$adjustedTIRdown[x], tirm$closestTSDseq[x]), tirm$downstreamExtra[x]))-1, mc.cores=ncores))
+tirm$tirstartup.regex[tirm$tirstartdown.regex==-2]=NA ## i use startup.regex as a filter below
+tirm$tirstartdown.regex[tirm$tirstartdown.regex==-2]=NA
+					
+tirm$tirstartup.regex[tirm$tirstartdown.regex==0]=NA ## i use startup.regex as a filter below
+tirm$tirstartdown.regex[tirm$tirstartdown.regex==0]=NA ## you can't subset in R with a 0!     
+			     
+############
+## Now, adjust positions to put them back on the same scale as the genome!!!
+############
+## also have to redo as above!				      
+tirm$start.adj[which(sapply(tirm$tirseq, length)>1)]=unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) (tirm$start[x]-offset) + tirm$tirstartup.regex[x] - 1 , mc.cores=ncores))## parentheses puts on same scale as upstreamExtra
+tirm$end.adj[which(sapply(tirm$tirseq, length)>1)]= unlist(mclapply(which(sapply(tirm$tirseq, length)>1), function(x) (tirm$end[x]-offset) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1, mc.cores=ncores))
+
+## floor is what GRanges does to decimal values, so replicate this here (e.g. 0.5 becomes 0, 3.5 becomes 3)
+#  tir$start[tir$origlen <= 2*offset ]- ( 2*offset-tir$origlen[tir$origlen <= 2*offset ]/2)
+tirm$start.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1 ]= unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & tirm$origlen <= 2*offset), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 1 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1]=   unlist(mclapply(which(sapply(tirm$tirseq, length)>1 & tirm$origlen <= 2*offset), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 1), mc.cores=ncores))
+
+## fix short odds
+is.odd <- function(x) x %% 2 != 0   
+tirm$start.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1 & is.odd(tirm$origlen)]= unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)& sapply(tirm$tirseq, length)>1 ), function(x) (tirm$start[x] - floor(2*offset - tirm$origlen[x]/2) + tirm$tirstartup.regex[x] - 2 ), mc.cores=ncores))
+tirm$end.adj[tirm$origlen <= 2*offset & sapply(tirm$tirseq, length)>1 & is.odd(tirm$origlen)]=   unlist(mclapply(which(tirm$origlen <= 2*offset & is.odd(tirm$origlen)& sapply(tirm$tirseq, length)>1 ), function(x) (tirm$end[x] - floor(tirm$origlen[x]/2) + tirm$tirstartdown.regex[x] + nchar(tirm$adjustedTIRup[x]) - 2), mc.cores=ncores))
+				      				      
+					  
+################
+## check that i have what i think i have
+################						
+#tir$tirupinseq=	as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start.adj, end=tir$start.adj+nchar(tir$tirseqSingle)-1))))				
+#tir$tirdowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end.adj-nchar(tir$tirseqSingle)+1, end=tir$end.adj)))))
+tirm$tiradjustedupinseq[which(sapply(tirm$tirseq, length)>1)]=NA
+tirm$tiradjusteddowninseqRC[which(sapply(tirm$tirseq, length)>1)]=NA
+#tirmtemp=tirm[!is.na(tirm$closestTSDoffset) & sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1,]
+tirm$tiradjustedupinseq[!is.na(tirm$closestTSDoffset) & sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1]=as.character(getSeq(seqs, 
+			GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1], 
+			IRanges(start=tirm$start.adj[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1], 
+				end=tirm$start.adj[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1]+nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1 & !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1])-1))))	
+														 
+tirm$tiradjusteddowninseqRC[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1& !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1]=as.character(reverseComplement(getSeq(seqs, 
+			GRanges(tirm$chrnew[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1& !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1], 
+			IRanges(start=tirm$end.adj[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1& !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1]-nchar(tirm$adjustedTIRup[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1& !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1])+1, 
+				end=tirm$end.adj[!is.na(tirm$closestTSDseq) & sapply(tirm$tirseq, length)>1& !is.na(tirm$tirstartup.regex) & tirm$tirstartup.regex!=-1])))))
+																		      
+tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
 						  
 ################
 ## check that i have what i think i have
 ################						
 
-tirm$tiradjustedupinseq=as.character(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$start.adj, end=tirm$start.adj+nchar(tirm$adjustedTIRup)-1))))				
-tirm$tiradjusteddowninseqRC=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew, IRanges(start=tirm$end.adj-nchar(tirm$adjustedTIRup)+1, end=tirm$end.adj)))))
-																		      
-tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
+#tirm$tiradjustedupinseq[!is.na(tirm$adjustedTIRup)]=as.character(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$start.adj[!is.na(tirm$adjustedTIRup)], end=tirm$start.adj[!is.na(tirm$adjustedTIRup)]+nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])-1))))				
+#tirm$tiradjusteddowninseqRC[!is.na(tirm$adjustedTIRup)]=as.character(reverseComplement(getSeq(seqs, GRanges(tirm$chrnew[!is.na(tirm$adjustedTIRup)], IRanges(start=tirm$end.adj[!is.na(tirm$adjustedTIRup)]-nchar(tirm$adjustedTIRup[!is.na(tirm$adjustedTIRup)])+1, end=tirm$end.adj[!is.na(tirm$adjustedTIRup)])))))																		      
+#tirm$tirsadjustedmatch=tirm$adjustedTIRup==tirm$tiradjustedupinseq & tirm$adjustedTIRdownRC==tirm$tiradjusteddowninseqRC & tirm$tiradjustedupinseq!=''	
+
+														 
+## there should be none of these!
+tirm[!is.na(tirm$closestTSDoffset) & !tirm$tirsadjustedmatch,]
 
 						  
 						  
-dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
+#dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj-1, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch=', tirm$seqdist, '_', tirm$adjustedTIRdown))
+dm=data.frame(tirm$chrnew, 'TARGeT', 'terminal_inverted_repeat_element', tirm$start.adj, tirm$end.adj, '.', tirm$strand, '.', paste0('ID=', tirm$mtec, '_', tirm$closestTSDseq, '_', tirm$adjustedTIRup, '_mismatch-', tirm$seqdist, '_', tirm$adjustedTIRdown))
 ### this concerns me!!!
-dm[,4:5]=dm[,4:5]-1
-dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2),]
+#dm[,4:5]=dm[,4:5]-1
+dm=dm[!is.na(tirm$closestTSDoffset) & tirm$seqdist<(nchar(tirm$adjustedTIRup)*0.2) & tirm$tirsadjustedmatch,]
+dm=dm[complete.cases(dm),]
 #write.table(d[!is.na(tir$whichrule) & d[,4]<d[,5],], file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 #write.table(d[d[,4]<d[,5],], file=paste0(GENOMENAME, '_unfiltered_tir_', Sys.Date(), '.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
-write.table(dm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatchAll.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
+write.table(dm, file=paste0(GENOMENAME, '_detectMITE_', Sys.Date(),'.', splitfile, '.mismatchAll.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 ## for maizegdb with Chr
 ddm=dm				
 levels(ddm$tirm.chrnew)[1:10]=paste0('Chr', levels(ddm$tirm.chrnew)[1:10])	
-write.table(ddm, file=paste0(GENOMENAME, '_tir_', Sys.Date(), '.mismatchAll.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F, append=T)
+write.table(ddm, file=paste0(GENOMENAME, '_detectMITE_', Sys.Date(),'.', splitfile, '.mismatchAll.Chr.gff3'), col.names=F, row.names=F, sep='\t', quote=F)
 
 }
