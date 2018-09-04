@@ -42,7 +42,7 @@ a$direction=gsub('Direction:', '', a$V8)
 dm=fread('detectMITE_positions_tirtsd.txt', header=T)
 #dma=fread('all_w22_mtec_tir_target_matches.txt', header=F)
 
-splita=split(a, rep(1:ceiling(nrow(a)/500000), each=500000, length.out=nrow(a)))
+splita=split(a, rep(1:ceiling(nrow(a)/200000), each=200000, length.out=nrow(a)))
 for(splitfile in 1:length(splita)){
 #for(splitfile in split(which(sapply(tirm$tirseq, length)>1), ceiling(seq_along(which(sapply(tirm$tirseq, length)>1))/500000))){
 #a=fread('all_w22_mtec_tir_target_matches.txt', header=F) ## this is just MTEC
