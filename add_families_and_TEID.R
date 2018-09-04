@@ -11,7 +11,8 @@ library(plyr)
 #tir=tir[tir$start.adj-tir$end.adj<0,]
 
 tir=import.gff3('B73_tir_2018-08-31.gff3')
-
+#tir=import.gff3('W22_tir_2018-08-31.gff3')
+#end(tir)=end(tir)+1  ## for W22 2018-08-31.gff3 where the end needs to be incremented
 filt=nchar(str_split_fixed(tir$ID, '_', 7)[,5])>=5 & width(tir)>=40
 tir=tir[filt,]
 tircols=str_split_fixed(tir$ID, '_', 7)
@@ -31,6 +32,7 @@ tir.gr=tir
 
 
 tirmm=import.gff3('B73_tir_2018-08-31.mismatchAll.gff3')
+#tirmm=import.gff3('W22_tir_2018-09-01.mismatchAll.gff3')
 mmfilt=nchar(str_split_fixed(tirmm$ID, '_', 7)[,5])>=5 & width(tirmm)>=40
 tirmm=tirmm[mmfilt,]
 tirmmcols=str_split_fixed(tirmm$ID, '_', 7)
@@ -169,7 +171,7 @@ mtec$collapsedfamname[mtec$V1=='MTEC000019']='DTM00555'
 ### output info on collapsed families
 collapsed=mtec[mtec$famname!=mtec$collapsedfamname,2:4]
 names(collapsed)=c('mtec_fasta_name', 'mtec_name', 'family_added_to')
-write.table(collapsed, '~/projects/tir_modified_mcs/mtec/MTEC_families_collapsed_into_other_families.txt', row.names=F, col.names=T, quote=F, sep='\t')
+#write.table(collapsed, '~/projects/tir_modified_mcs/mtec/MTEC_families_collapsed_into_other_families.txt', row.names=F, col.names=T, quote=F, sep='\t')
 
 
 ## change families
