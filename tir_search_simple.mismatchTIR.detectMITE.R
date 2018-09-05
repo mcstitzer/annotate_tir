@@ -53,8 +53,7 @@ tir=splita[[splitfile]][,c('mtec', 'chr', 'start', 'end', 'direction')]
 
 tir$chrnew=tir$chr ## not needed anymore, but so as not to change the names later, changing here.
 tir$source=ifelse(grepl('B73v4', tir$mtec), 'detectMITE', 'TARGeT')
-
-
+	
 ## which TSD lengths do we expect for each superfamily?
 ## just changed DTM to 9 bp TSD ala Mobile DNA II
 tsdlens=data.frame(sup=c('DTA', 'DTC', 'DTH', 'DTM', 'DTT'), tsdlen=c(8, 3, 3, 9, 2))
@@ -75,6 +74,12 @@ tir$tsdlen[tir$sup=='DTX']=as.numeric(as.character(mapvalues(tir$mtec[tir$sup=='
 tir$origlen=tir$end-tir$start ## note that none of these are negative!
 
 offset=200
+	
+## account for what happens if we're within an offset distance from the end of the chromosome.	
+tir$chrmax=as.numeric(as.character(mapvalues(tir$chr, from=names(seqs), to=width(seqs))))
+tir=tir[tir$start>offset & tir$end<tir$chrmax-offset,]
+
+	
 tir$upstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))
 tir$downstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset))))
 tir$downstreamExtraRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset)))))
