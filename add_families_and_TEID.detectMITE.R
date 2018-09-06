@@ -59,14 +59,14 @@ end(tirdm)=end(tirdm)+1
 dmfilt=nchar(str_split_fixed(tirdm$ID, '_', 7)[,5])>=5 & width(tirdm)>=40
 tirdm=tirdm[dmfilt,]
 tirdmcols=str_split_fixed(tirdm$ID, '_', 7)
-tirdm$mtec=sapply(1:length(tirdm), function(x) paste(unlist(tirdmcols[x,1:3]), collapse='_'))
-tirdm$sup=substr(tirdm$mtec, 1, 3)
-tirdm$mtecfamnum=substr(tirdm$mtec,4,8)
-tirdm$famname=paste0(tirdm$sup,tirdm$mtecfamnum)
-tirdm$TSD=tirdmcols[,4]
-tirdm$TIRup=tirdmcols[,5]
-tirdm$TIRmm=tirdmcols[,6]
-tirdm$TIRdown=tirdmcols[,7]
+tirdm$mtec=NA #sapply(1:length(tirdm), function(x) paste(unlist(tirdmcols[x,1:3]), collapse='_'))
+tirdm$sup=substr(tirdmcols[,1], 1, 3)
+tirdm$mtecfamnum=NA
+tirdm$famname=substr(tirdmcols[,1],1,8)
+tirdm$TSD=tirdmcols[,2]
+tirdm$TIRup=tirdmcols[,3]
+tirdm$TIRmm=tirdmcols[,4]
+tirdm$TIRdown=tirdmcols[,5]
 tirdm.gr=tirdm
 #mcols(tirmm.gr)=NULL
 
