@@ -84,7 +84,7 @@ tir$tirseqRC=sapply(1:nrow(tir), function(x) getLongestCommonSubstring(c(tir$ups
 ## deal with pesky multiple TIRs by removing them here. 
 tir$tirseqSingle=unlist(lapply(tir$tirseq, function(l) l[[1]]))
 tir$tirseqRCSingle=unlist(lapply(tir$tirseqRC, function(l) l[[length(l)]]))  ## not good - this can be either first or second! AAAHHHHHHHHHH
-tir=tir[!grepl('N', tir$tirseqSingle),]
+tir=tir[!grepl('N', tir$tirseqSingle, useBytes=T),]
 
 ## get position of TIR in forward orientation of upstream extract.
 #tir$tirstartup=sapply(1:nrow(tir), function(x) as.numeric(regexpr(tir$tirseqSingle[x], tir$upstreamExtra[x])))
