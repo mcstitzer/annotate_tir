@@ -49,7 +49,10 @@ tirmm.gr=tirmm
                  
 tir.gr=c(tir.gr,tirmm.gr)
            
-for(dmSplit in c('B73_detectMITE_2018-09-04.1.gff3', 'B73_detectMITE_2018-09-04.1.gff3', 'B73_detectMITE_2018-09-04.1.gff3')){                 
+                  
+### yikes! I know this says B73 but trust these are W22 - it's hard coded in the original script I used to run. But these are DEFINITELY w22, and in the w22 directory!                  
+#for(dmSplit in c('B73_detectMITE_2018-09-04.1.gff3', 'B73_detectMITE_2018-09-04.1.gff3', 'B73_detectMITE_2018-09-04.1.gff3')){                 
+for(dmSplit in c(paste0('B73_detectMITE_2018-09-04.',1:8,'.gff3'), paste0('B73_detectMITE_2018-09-05.',9:20,'.gff3'))){
 #tirdm=import.gff3('B73_tir_2018-08-31.mismatchAll.gff3')
 tirdm=import.gff3(dmSplit)
 end(tirdm)=end(tirdm)+1
