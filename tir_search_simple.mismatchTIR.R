@@ -56,6 +56,11 @@ tir$tsdlen=as.numeric(tir$tsdlen)
 tir$origlen=tir$end-tir$start ## note that none of these are negative!
 
 offset=200
+
+## account for what happens if we're within an offset distance from the end of the chromosome.	
+tir$chrmax=as.numeric(as.character(mapvalues(tir$chr, from=names(seqs), to=width(seqs))))
+tir=tir[tir$start>offset & tir$end<tir$chrmax-offset,]
+
 tir$upstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$start-offset, end=tir$start+offset))))
 tir$downstreamExtra=as.character(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset))))
 tir$downstreamExtraRC=as.character(reverseComplement(getSeq(seqs, GRanges(tir$chrnew, IRanges(start=tir$end-offset, end=tir$end+offset)))))
