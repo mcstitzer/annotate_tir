@@ -20,6 +20,11 @@ CAGGG
 
 [Kunze and Weil (2002), Mobile DNA II](http://www.asmscience.org/content/book/10.1128/9781555817954.chap24)
 
+Rlibstree can be difficult to install, best way:
+`install.packages("devtools")`
+`library(devtools)`
+`install_github("omegahat/Rlibstree")`
+
 ### path right now is: (need to clean up)
 
 1. `tir_search_simple.mismatchTIR.R` - NOTE that this has to be on UNIX (even using R) because I'm having locale issues I haven't been able to resolve on my Mac.
